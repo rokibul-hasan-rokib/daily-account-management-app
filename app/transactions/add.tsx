@@ -1,13 +1,12 @@
 import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { MenuButton } from '@/components/menu-button';
-import { Colors, Typography, Spacing, Shadows, BorderRadius } from '@/constants/design-system';
+import { BorderRadius, Colors, Shadows, Spacing, Typography } from '@/constants/design-system';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 type TransactionType = 'income' | 'expense';
 

@@ -9,11 +9,18 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
+interface SubMenuItem {
+  title: string;
+  href: string;
+  icon?: string;
+}
+
 interface NavItem {
   title: string;
   icon: string;
   href: string;
   hasSubmenu?: boolean;
+  submenuItems?: SubMenuItem[];
 }
 
 const navItems: NavItem[] = [
@@ -27,6 +34,10 @@ const navItems: NavItem[] = [
     icon: 'receipt',
     href: '/transactions',
     hasSubmenu: true,
+    submenuItems: [
+      { title: 'Add Transaction', href: '/transactions/add', icon: 'add-circle' },
+      { title: 'View All', href: '/transactions', icon: 'list' },
+    ],
   },
   {
     title: 'Profit & Loss',
@@ -43,6 +54,11 @@ const navItems: NavItem[] = [
     icon: 'bar-chart',
     href: '/item-analytics',
     hasSubmenu: true,
+    submenuItems: [
+      { title: 'View Analytics', href: '/item-analytics', icon: 'bar-chart' },
+      { title: 'Top Items', href: '/item-analytics?filter=top', icon: 'trending-up' },
+      { title: 'Trends', href: '/item-analytics?filter=trends', icon: 'show-chart' },
+    ],
   },
   {
     title: 'Scan Receipt',
@@ -54,33 +70,43 @@ const navItems: NavItem[] = [
     icon: 'local-offer',
     href: '/categories',
     hasSubmenu: true,
+    submenuItems: [
+      { title: 'Add Category', href: '/categories?action=add', icon: 'add-circle' },
+      { title: 'View All', href: '/categories', icon: 'list' },
+    ],
   },
   {
     title: 'Merchants',
     icon: 'store',
     href: '/merchants',
     hasSubmenu: true,
+    submenuItems: [
+      { title: 'Add Merchant', href: '/merchants?action=add', icon: 'add-circle' },
+      { title: 'View All', href: '/merchants', icon: 'list' },
+    ],
   },
   {
     title: 'Rules',
     icon: 'gavel',
     href: '/rules',
     hasSubmenu: true,
+    submenuItems: [
+      { title: 'Add Rule', href: '/rules?action=add', icon: 'add-circle' },
+      { title: 'View All', href: '/rules', icon: 'list' },
+    ],
   },
   {
-    title: 'Alerts',
-    icon: 'notifications',
-    href: '/alerts',
-  },
-  {
-    title: 'Summaries',
-    icon: 'description',
-    href: '/summaries',
-  },
-  {
-    title: 'Settings',
-    icon: 'settings',
+    title: 'Others',
+    icon: 'more-horiz',
     href: '/settings',
+    hasSubmenu: true,
+    submenuItems: [
+      { title: 'Alerts', href: '/alerts', icon: 'notifications' },
+      { title: 'Summaries', href: '/summaries', icon: 'description' },
+      { title: 'Settings', href: '/settings', icon: 'settings' },
+      { title: 'Export Data', href: '/settings?tab=export', icon: 'file-download' },
+      { title: 'Backup & Restore', href: '/settings?tab=backup', icon: 'cloud-upload' },
+    ],
   },
 ];
 
@@ -173,10 +199,34 @@ export function SidebarNavigation() {
                 </TouchableOpacity>
               </Link>
               
-              {/* Submenu placeholder - can be expanded later */}
-              {item.hasSubmenu && expandedItems.has(item.title) && (
+              {/* Submenu */}
+              {item.hasSubmenu && expandedItems.has(item.title) && item.submenuItems && (
                 <View style={styles.submenu}>
-                  {/* Submenu items would go here */}
+                  {item.submenuItems.map((subItem) => {
+                    const subActive = pathname === subItem.href || pathname.startsWith(subItem.href);
+                    return (
+                      <Link key={subItem.href} href={subItem.href as any} asChild>
+                        <TouchableOpacity
+                          style={[styles.submenuItem, subActive && styles.submenuItemActive]}
+                        >
+                          {subItem.icon && (
+                            <MaterialIcons
+                              name={subItem.icon as any}
+                              size={18}
+                              color={subActive ? '#FFFFFF' : '#B8A9D9'}
+                              style={styles.submenuIcon}
+                            />
+                          )}
+                          <Text style={[
+                            styles.submenuText,
+                            subActive && styles.submenuTextActive
+                          ]}>
+                            {subItem.title}
+                          </Text>
+                        </TouchableOpacity>
+                      </Link>
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -295,5 +345,29 @@ const styles = StyleSheet.create({
   submenu: {
     paddingLeft: 40,
     paddingVertical: 8,
+    gap: 4,
+  },
+  submenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginVertical: 2,
+    borderRadius: 6,
+  },
+  submenuItemActive: {
+    backgroundColor: '#5A3A93',
+  },
+  submenuIcon: {
+    marginRight: 12,
+  },
+  submenuText: {
+    fontSize: 14,
+    color: '#B8A9D9',
+    fontWeight: '400',
+  },
+  submenuTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
 });

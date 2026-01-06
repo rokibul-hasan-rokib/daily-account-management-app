@@ -1,35 +1,90 @@
-import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { MenuButton } from '@/components/menu-button';
-import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, Image } from 'react-native';
+import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Colors, Shadows, Spacing, Typography } from '@/constants/design-system';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-// import * as ImagePicker from 'expo-image-picker'; // Install expo-image-picker for full functionality
+import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ScanReceiptScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Request camera permissions on mount
+    (async () => {
+      if (Platform.OS !== 'web') {
+        const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+        const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        setHasPermission(cameraStatus === 'granted' && mediaStatus === 'granted');
+      } else {
+        setHasPermission(true); // Web doesn't need permissions
+      }
+    })();
+  }, []);
 
   const pickImage = async () => {
-    // TODO: Install expo-image-picker: npx expo install expo-image-picker
-    alert('Image picker functionality coming soon! Install expo-image-picker for full functionality.');
-    // Placeholder for demo
-    setImage('https://via.placeholder.com/400x300');
+    try {
+      if (Platform.OS !== 'web' && !hasPermission) {
+        Alert.alert(
+          'Permission Required',
+          'Please grant permission to access your photo library.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
   };
 
   const takePhoto = async () => {
-    // TODO: Install expo-image-picker: npx expo install expo-image-picker
-    alert('Camera functionality coming soon! Install expo-image-picker for full functionality.');
-    // Placeholder for demo
-    setImage('https://via.placeholder.com/400x300');
+    try {
+      if (Platform.OS !== 'web' && !hasPermission) {
+        Alert.alert(
+          'Permission Required',
+          'Please grant permission to access your camera.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
   };
 
   const processReceipt = async () => {
     if (!image) return;
     setIsProcessing(true);
-    // Simulate processing
+    
+    // Simulate OCR processing - in real app, this would call your backend API
     setTimeout(() => {
       setIsProcessing(false);
       // Navigate to review screen with image
@@ -92,20 +147,45 @@ export default function ScanReceiptScreen() {
         </Card>
       )}
 
+      {/* Permission Warning */}
+      {hasPermission === false && (
+        <Card variant="outlined" style={styles.permissionCard}>
+          <MaterialIcons name="warning" size={24} color={Colors.warning.main} />
+          <ThemedText style={styles.permissionText}>
+            Camera and photo library permissions are required to scan receipts.
+            Please enable them in your device settings.
+          </ThemedText>
+        </Card>
+      )}
+
       {/* Action Buttons */}
       <View style={styles.actions}>
-        <Button
-          title="Take Photo"
-          variant="primary"
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            styles.primaryButton,
+            hasPermission === false && styles.buttonDisabled
+          ]}
           onPress={takePhoto}
-          style={styles.actionButton}
-        />
-        <Button
-          title="Choose from Gallery"
-          variant="outline"
+          disabled={hasPermission === false}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="camera-alt" size={20} color={Colors.text.inverse} />
+          <Text style={styles.primaryButtonText}>Take Photo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            styles.outlineButton,
+            hasPermission === false && styles.buttonDisabled
+          ]}
           onPress={pickImage}
-          style={styles.actionButton}
-        />
+          disabled={hasPermission === false}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="photo-library" size={20} color={Colors.primary[600]} />
+          <Text style={styles.outlineButtonText}>Choose from Gallery</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Process Button */}
@@ -252,6 +332,34 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: 12,
+  },
+  primaryButton: {
+    backgroundColor: Colors.primary[500],
+  },
+  outlineButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: Colors.primary[500],
+  },
+  primaryButtonText: {
+    color: Colors.text.inverse,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  outlineButtonText: {
+    color: Colors.primary[600],
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   processCard: {
     marginHorizontal: Spacing.lg,
@@ -289,5 +397,21 @@ const styles = StyleSheet.create({
   featureText: {
     fontSize: Typography.fontSize.base,
     color: Colors.text.primary,
+  },
+  permissionCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.md,
+    backgroundColor: Colors.warning.light,
+    borderColor: Colors.warning.main,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  permissionText: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.primary,
+    lineHeight: Typography.fontSize.sm * 1.5,
   },
 });

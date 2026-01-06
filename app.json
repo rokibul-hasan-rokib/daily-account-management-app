@@ -38,6 +38,13 @@
             "backgroundColor": "#4B2E83"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to scan receipts.",
+          "cameraPermission": "The app needs access to your camera to take photos of receipts."
+        }
       ]
     ],
     "experiments": {
