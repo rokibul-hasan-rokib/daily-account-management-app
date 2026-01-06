@@ -43,16 +43,16 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semibold,
-    color: Colors.text.primary,
+    color: Colors.primary[700],
     marginBottom: Spacing.sm,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background.light,
+    backgroundColor: Colors.primary[50],
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.gray[200],
+    borderColor: Colors.primary[200],
     paddingHorizontal: Spacing.md,
   },
   inputError: {
