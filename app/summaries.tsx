@@ -1,44 +1,170 @@
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { MenuButton } from '@/components/menu-button';
+import {
+  dummyTransactions,
+  getTotalExpenses,
+  getTotalIncome,
+  getUpcomingLiabilities,
+  dummyReceiptItems,
+  dummyReceipts,
+} from '@/data/dummy-data';
+import { formatCurrency, getPeriodDates } from '@/utils/helpers';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-interface Summary {
-  id: string;
+interface SummaryInsight {
+  type: 'spending' | 'category' | 'bill' | 'comparison' | 'item';
   title: string;
-  period: string;
-  type: 'monthly' | 'weekly' | 'custom';
-  createdAt: string;
-  totalIncome: number;
-  totalExpenses: number;
+  message: string;
+  icon: string;
+  color: string;
 }
 
-const dummySummaries: Summary[] = [
-  { id: '1', title: 'January 2024 Summary', period: 'Jan 1 - Jan 31, 2024', type: 'monthly', createdAt: '2 days ago', totalIncome: 5000, totalExpenses: 3200 },
-  { id: '2', title: 'December 2023 Summary', period: 'Dec 1 - Dec 31, 2023', type: 'monthly', createdAt: '1 month ago', totalIncome: 4800, totalExpenses: 3500 },
-  { id: '3', title: 'Week 1 Summary', period: 'Jan 1 - Jan 7, 2024', type: 'weekly', createdAt: '2 weeks ago', totalIncome: 1200, totalExpenses: 800 },
-];
-
 export default function SummariesScreen() {
-  const [summaries] = useState<Summary[]>(dummySummaries);
-  const [filter, setFilter] = useState<'all' | 'monthly' | 'weekly'>('all');
+  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('month');
 
-  const filteredSummaries = summaries.filter(summary =>
-    filter === 'all' || summary.type === filter
+  const { start, end } = getPeriodDates(period);
+  const transactions = dummyTransactions.filter(t => t.date >= start && t.date <= end);
+  
+  const totalIncome = getTotalIncome(transactions);
+  const totalExpenses = getTotalExpenses(transactions);
+  const balance = totalIncome - totalExpenses;
+  const profitLoss = totalIncome - totalExpenses;
+
+  // Previous period for comparison
+  const prevStart = new Date(start);
+  const prevEnd = new Date(start);
+  const periodLength = end.getTime() - start.getTime();
+  prevStart.setTime(start.getTime() - periodLength);
+
+  const previousTransactions = dummyTransactions.filter(
+    t => t.date >= prevStart && t.date < start
   );
+  const prevIncome = getTotalIncome(previousTransactions);
+  const prevExpenses = getTotalExpenses(previousTransactions);
 
-  const handleExport = (id: string) => {
-    console.log('Exporting summary:', id);
-    alert('Export functionality coming soon!');
-  };
+  // Generate insights
+  const insights = useMemo(() => {
+    const summaryInsights: SummaryInsight[] = [];
 
-  const handleGenerate = () => {
-    alert('Generate summary functionality coming soon!');
-  };
+    // 1. Top spending category
+    const categorySpending: Record<string, number> = {};
+    transactions.forEach(t => {
+      if (t.type === 'expense') {
+        categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount;
+      }
+    });
+
+    const topCategory = Object.entries(categorySpending)
+      .sort((a, b) => b[1] - a[1])[0];
+
+    if (topCategory) {
+      const percentage = ((topCategory[1] / totalExpenses) * 100).toFixed(0);
+      summaryInsights.push({
+        type: 'category',
+        title: 'Top Spending Category',
+        message: `${topCategory[0].charAt(0).toUpperCase() + topCategory[0].slice(1).replace('-', ' ')} accounted for ${percentage}% of your expenses (${formatCurrency(topCategory[1])})`,
+        icon: 'shopping-cart',
+        color: Colors.primary[500],
+      });
+    }
+
+    // 2. Comparison vs previous period
+    if (prevExpenses > 0) {
+      const expenseChange = ((totalExpenses - prevExpenses) / prevExpenses) * 100;
+      if (Math.abs(expenseChange) > 5) {
+        summaryInsights.push({
+          type: 'comparison',
+          title: expenseChange > 0 ? 'Spending Increased' : 'Spending Decreased',
+          message: `Your expenses ${expenseChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(expenseChange).toFixed(0)}% compared to the previous ${period}`,
+          icon: expenseChange > 0 ? 'trending-up' : 'trending-down',
+          color: expenseChange > 0 ? Colors.error.main : Colors.success.main,
+        });
+      }
+    }
+
+    // 3. Upcoming bills
+    const upcomingBills = getUpcomingLiabilities();
+    if (upcomingBills.length > 0) {
+      const totalBills = upcomingBills.reduce((sum, bill) => sum + bill.amount, 0);
+      summaryInsights.push({
+        type: 'bill',
+        title: 'Upcoming Bills',
+        message: `You have ${upcomingBills.length} bill${upcomingBills.length !== 1 ? 's' : ''} totaling ${formatCurrency(totalBills)} due soon`,
+        icon: 'event',
+        color: Colors.warning.main,
+      });
+    }
+
+    // 4. Top item spending (if receipts exist)
+    const currentReceipts = dummyReceipts.filter(r => r.date >= start && r.date <= end);
+    const currentReceiptIds = currentReceipts.map(r => r.id);
+    const currentItems = dummyReceiptItems.filter(item => currentReceiptIds.includes(item.receiptId));
+
+    if (currentItems.length > 0) {
+      const itemSpending: Record<string, number> = {};
+      currentItems.forEach(item => {
+        itemSpending[item.itemName] = (itemSpending[item.itemName] || 0) + item.totalPrice;
+      });
+
+      const topItem = Object.entries(itemSpending)
+        .sort((a, b) => b[1] - a[1])[0];
+
+      if (topItem) {
+        summaryInsights.push({
+          type: 'item',
+          title: 'Top Item Purchase',
+          message: `You spent ${formatCurrency(topItem[1])} on ${topItem[0]} this ${period}`,
+          icon: 'inventory',
+          color: Colors.info.main,
+        });
+      }
+    }
+
+    // 5. Profit/Loss status
+    if (profitLoss > 0) {
+      summaryInsights.push({
+        type: 'comparison',
+        title: 'Positive Profit',
+        message: `You're in profit! Income exceeded expenses by ${formatCurrency(profitLoss)}`,
+        icon: 'check-circle',
+        color: Colors.success.main,
+      });
+    } else if (profitLoss < 0) {
+      summaryInsights.push({
+        type: 'comparison',
+        title: 'Loss This Period',
+        message: `Expenses exceeded income by ${formatCurrency(Math.abs(profitLoss))}`,
+        icon: 'warning',
+        color: Colors.error.main,
+      });
+    }
+
+    return summaryInsights;
+  }, [period, transactions, totalExpenses, prevExpenses, profitLoss]);
+
+  // Category breakdown
+  const categoryBreakdown = useMemo(() => {
+    const breakdown: Record<string, { amount: number; count: number }> = {};
+    transactions.forEach(t => {
+      if (t.type === 'expense') {
+        if (!breakdown[t.category]) {
+          breakdown[t.category] = { amount: 0, count: 0 };
+        }
+        breakdown[t.category].amount += t.amount;
+        breakdown[t.category].count += 1;
+      }
+    });
+    return Object.entries(breakdown)
+      .sort((a, b) => b[1].amount - a[1].amount)
+      .slice(0, 5);
+  }, [transactions]);
+
+  const periodLabel = period === 'day' ? 'Today' : period === 'week' ? 'This Week' : 'This Month';
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -49,92 +175,153 @@ export default function SummariesScreen() {
           <View>
             <ThemedText type="title" style={styles.headerTitle}>Summaries</ThemedText>
             <ThemedText style={styles.headerSubtitle}>
-              View and export financial summaries
+              Quick insights into your finances
             </ThemedText>
           </View>
         </View>
-        <TouchableOpacity style={styles.generateButton} onPress={handleGenerate}>
-          <MaterialIcons name="add" size={24} color={Colors.text.inverse} />
-        </TouchableOpacity>
       </View>
 
-      {/* Filter */}
-      <View style={styles.filterContainer}>
-        {(['all', 'monthly', 'weekly'] as const).map((f) => (
+      {/* Period Filter */}
+      <View style={styles.periodFilter}>
+        {(['day', 'week', 'month'] as const).map((p) => (
           <TouchableOpacity
-            key={f}
-            style={[styles.filterButton, filter === f && styles.filterButtonActive]}
-            onPress={() => setFilter(f)}
+            key={p}
+            style={[styles.periodButton, period === p && styles.periodButtonActive]}
+            onPress={() => setPeriod(p)}
             activeOpacity={0.7}
           >
             <ThemedText style={[
-              styles.filterButtonText,
-              filter === f && styles.filterButtonTextActive
+              styles.periodButtonText,
+              period === p && styles.periodButtonTextActive
             ]}>
-              {f === 'all' ? 'All' : f === 'monthly' ? 'Monthly' : 'Weekly'}
+              {p === 'day' ? 'Today' : p === 'week' ? 'Week' : 'Month'}
             </ThemedText>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Summaries List */}
-      <View style={styles.summariesList}>
-        {filteredSummaries.map((summary) => (
-          <Card key={summary.id} variant="elevated" style={styles.summaryCard}>
-            <View style={styles.summaryHeader}>
-              <View style={styles.summaryIcon}>
-                <MaterialIcons name="description" size={24} color={Colors.primary[600]} />
+      {/* Summary Overview Card */}
+      <Card variant="elevated" style={styles.summaryCard}>
+        <View style={styles.summaryHeader}>
+          <MaterialIcons name="assessment" size={24} color={Colors.primary[600]} />
+          <ThemedText type="subtitle" style={styles.summaryTitle}>
+            {periodLabel} Summary
+          </ThemedText>
+        </View>
+        <View style={styles.summaryStats}>
+          <View style={styles.summaryStat}>
+            <Text style={styles.summaryStatLabel}>Money In</Text>
+            <Text style={[styles.summaryStatValue, { color: Colors.success.main }]}>
+              {formatCurrency(totalIncome)}
+            </Text>
+          </View>
+          <View style={styles.summaryStat}>
+            <Text style={styles.summaryStatLabel}>Money Out</Text>
+            <Text style={[styles.summaryStatValue, { color: Colors.error.main }]}>
+              {formatCurrency(totalExpenses)}
+            </Text>
+          </View>
+          <View style={styles.summaryStat}>
+            <Text style={styles.summaryStatLabel}>Balance</Text>
+            <Text style={[
+              styles.summaryStatValue,
+              balance >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
+            ]}>
+              {formatCurrency(balance)}
+            </Text>
+          </View>
+          <View style={styles.summaryStat}>
+            <Text style={styles.summaryStatLabel}>Profit/Loss</Text>
+            <Text style={[
+              styles.summaryStatValue,
+              profitLoss >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
+            ]}>
+              {formatCurrency(profitLoss)}
+            </Text>
+          </View>
+        </View>
+      </Card>
+
+      {/* Insights */}
+      <Card variant="elevated" style={styles.insightsCard}>
+        <View style={styles.insightsHeader}>
+          <MaterialIcons name="lightbulb" size={20} color={Colors.warning.main} />
+          <ThemedText type="subtitle" style={styles.insightsTitle}>
+            Key Insights
+          </ThemedText>
+        </View>
+        <View style={styles.insightsList}>
+          {insights.map((insight, index) => (
+            <View key={index} style={styles.insightItem}>
+              <View style={[styles.insightIcon, { backgroundColor: `${insight.color}20` }]}>
+                <MaterialIcons name={insight.icon as any} size={20} color={insight.color} />
               </View>
-              <View style={styles.summaryInfo}>
-                <ThemedText style={styles.summaryTitle}>{summary.title}</ThemedText>
-                <ThemedText style={styles.summaryPeriod}>{summary.period}</ThemedText>
-                <ThemedText style={styles.summaryDate}>Created {summary.createdAt}</ThemedText>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightTitle}>{insight.title}</Text>
+                <Text style={styles.insightMessage}>{insight.message}</Text>
               </View>
             </View>
+          ))}
+        </View>
+      </Card>
 
-            <View style={styles.summaryStats}>
-              <View style={styles.statItem}>
-                <MaterialIcons name="trending-up" size={20} color={Colors.success.main} />
-                <View style={styles.statContent}>
-                  <Text style={styles.statLabel}>Income</Text>
-                  <Text style={[styles.statValue, { color: Colors.success.main }]}>
-                    £{summary.totalIncome.toFixed(2)}
-                  </Text>
+      {/* Category Breakdown */}
+      {categoryBreakdown.length > 0 && (
+        <Card variant="elevated" style={styles.categoryCard}>
+          <View style={styles.categoryHeader}>
+            <MaterialIcons name="pie-chart" size={20} color={Colors.primary[600]} />
+            <ThemedText type="subtitle" style={styles.categoryTitle}>
+              Where Your Money Went
+            </ThemedText>
+          </View>
+          <View style={styles.categoryList}>
+            {categoryBreakdown.map(([category, data]) => {
+              const percentage = ((data.amount / totalExpenses) * 100).toFixed(0);
+              return (
+                <View key={category} style={styles.categoryItem}>
+                  <View style={styles.categoryInfo}>
+                    <Text style={styles.categoryName}>
+                      {category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ')}
+                    </Text>
+                    <Text style={styles.categoryMeta}>
+                      {data.count} transaction{data.count !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.categoryAmount}>
+                    <Text style={styles.categoryAmountValue}>{formatCurrency(data.amount)}</Text>
+                    <Badge label={`${percentage}%`} variant="info" size="sm" />
+                  </View>
                 </View>
-              </View>
-              <View style={styles.statItem}>
-                <MaterialIcons name="trending-down" size={20} color={Colors.error.main} />
-                <View style={styles.statContent}>
-                  <Text style={styles.statLabel}>Expenses</Text>
-                  <Text style={[styles.statValue, { color: Colors.error.main }]}>
-                    £{summary.totalExpenses.toFixed(2)}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.statItem}>
-                <MaterialIcons name="account-balance-wallet" size={20} color={Colors.primary[600]} />
-                <View style={styles.statContent}>
-                  <Text style={styles.statLabel}>Net</Text>
-                  <Text style={[styles.statValue, { 
-                    color: (summary.totalIncome - summary.totalExpenses) >= 0 
-                      ? Colors.success.main 
-                      : Colors.error.main 
-                  }]}>
-                    £{(summary.totalIncome - summary.totalExpenses).toFixed(2)}
-                  </Text>
-                </View>
-              </View>
-            </View>
+              );
+            })}
+          </View>
+        </Card>
+      )}
 
-            <Button
-              title="Export PDF"
-              variant="outline"
-              onPress={() => handleExport(summary.id)}
-              style={styles.exportButton}
-            />
-          </Card>
-        ))}
-      </View>
+      {/* Upcoming Bills */}
+      {getUpcomingLiabilities().length > 0 && (
+        <Card variant="elevated" style={styles.billsCard}>
+          <View style={styles.billsHeader}>
+            <MaterialIcons name="event" size={20} color={Colors.warning.main} />
+            <ThemedText type="subtitle" style={styles.billsTitle}>
+              Upcoming Bills
+            </ThemedText>
+          </View>
+          <View style={styles.billsList}>
+            {getUpcomingLiabilities().slice(0, 3).map((bill) => (
+              <View key={bill.id} style={styles.billItem}>
+                <View style={styles.billInfo}>
+                  <Text style={styles.billName}>{bill.name}</Text>
+                  <Text style={styles.billDue}>
+                    Due {bill.dueDate.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
+                  </Text>
+                </View>
+                <Text style={styles.billAmount}>{formatCurrency(bill.amount)}</Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+      )}
     </ScrollView>
   );
 }
@@ -145,9 +332,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray[50],
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     paddingHorizontal: Spacing.lg,
     paddingTop: 60,
     paddingBottom: Spacing.md,
@@ -156,7 +340,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    flex: 1,
   },
   headerTitle: {
     fontSize: Typography.fontSize['4xl'],
@@ -168,107 +351,208 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.base,
     color: Colors.text.secondary,
   },
-  generateButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary[500],
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.md,
-  },
-  filterContainer: {
+  periodFilter: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
     gap: Spacing.sm,
     marginBottom: Spacing.lg,
   },
-  filterButton: {
+  periodButton: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     borderRadius: 20,
     backgroundColor: Colors.background.light,
     ...Shadows.sm,
   },
-  filterButtonActive: {
+  periodButtonActive: {
     backgroundColor: Colors.primary[500],
   },
-  filterButtonText: {
+  periodButtonText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semibold,
     color: Colors.text.secondary,
   },
-  filterButtonTextActive: {
+  periodButtonTextActive: {
     color: Colors.text.inverse,
   },
-  summariesList: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing['2xl'],
-    gap: Spacing.md,
-  },
   summaryCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
     padding: Spacing.lg,
   },
   summaryHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  summaryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary[100],
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryInfo: {
-    flex: 1,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   summaryTitle: {
-    fontSize: Typography.fontSize.lg,
+    fontSize: Typography.fontSize.xl,
     fontWeight: Typography.fontWeight.bold,
     color: Colors.text.primary,
-    marginBottom: Spacing.xs,
-  },
-  summaryPeriod: {
-    fontSize: Typography.fontSize.sm,
-    color: Colors.text.secondary,
-    marginBottom: Spacing.xs,
-  },
-  summaryDate: {
-    fontSize: Typography.fontSize.xs,
-    color: Colors.text.tertiary,
   },
   summaryStats: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.md,
-    marginBottom: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: Colors.gray[200],
   },
-  statItem: {
+  summaryStat: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    minWidth: '45%',
+    padding: Spacing.md,
+    backgroundColor: Colors.gray[50],
+    borderRadius: 12,
   },
-  statContent: {
-    flex: 1,
-  },
-  statLabel: {
+  summaryStatLabel: {
     fontSize: Typography.fontSize.xs,
     color: Colors.text.secondary,
     marginBottom: Spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  statValue: {
-    fontSize: Typography.fontSize.base,
+  summaryStatValue: {
+    fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.bold,
   },
-  exportButton: {
-    width: '100%',
+  insightsCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+  },
+  insightsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  insightsTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+  },
+  insightsList: {
+    gap: Spacing.md,
+  },
+  insightItem: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.gray[50],
+    borderRadius: 12,
+  },
+  insightIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightContent: {
+    flex: 1,
+  },
+  insightTitle: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
+  },
+  insightMessage: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+    lineHeight: Typography.fontSize.sm * 1.5,
+  },
+  categoryCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  categoryTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+  },
+  categoryList: {
+    gap: Spacing.md,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
+  },
+  categoryInfo: {
+    flex: 1,
+  },
+  categoryName: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
+  },
+  categoryMeta: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+  },
+  categoryAmount: {
+    alignItems: 'flex-end',
+    gap: Spacing.xs,
+  },
+  categoryAmountValue: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+  },
+  billsCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing['2xl'],
+    padding: Spacing.lg,
+  },
+  billsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  billsTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+  },
+  billsList: {
+    gap: Spacing.md,
+  },
+  billItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
+  },
+  billInfo: {
+    flex: 1,
+  },
+  billName: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
+  },
+  billDue: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+  },
+  billAmount: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.error.main,
   },
 });

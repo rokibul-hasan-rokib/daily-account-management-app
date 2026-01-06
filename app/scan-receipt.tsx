@@ -32,7 +32,11 @@ export default function ScanReceiptScreen() {
     // Simulate processing
     setTimeout(() => {
       setIsProcessing(false);
-      alert('Receipt processed! Items extracted successfully.');
+      // Navigate to review screen with image
+      router.push({
+        pathname: '/scan-receipt-review',
+        params: { imageUri: image },
+      });
     }, 2000);
   };
 

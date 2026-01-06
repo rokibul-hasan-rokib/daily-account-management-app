@@ -52,6 +52,20 @@ export default function ProfitLossScreen() {
         </View>
       </View>
 
+      {/* Explanation Card */}
+      <Card variant="outlined" style={styles.explanationCard}>
+        <View style={styles.explanationContent}>
+          <MaterialIcons name="info" size={20} color={Colors.info.main} />
+          <View style={styles.explanationText}>
+            <Text style={styles.explanationTitle}>What is Profit & Loss?</Text>
+            <Text style={styles.explanationBody}>
+              Profit = Income − Expenses{'\n'}
+              A positive number means you made money. A negative number means you spent more than you earned.
+            </Text>
+          </View>
+        </View>
+      </Card>
+
       {/* Period Filter */}
       <View style={styles.periodFilter}>
         {(['today', 'week', 'month'] as const).map((p) => (
@@ -205,6 +219,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+  },
+  explanationCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.md,
+    backgroundColor: Colors.info.light,
+    borderColor: Colors.info.main,
+  },
+  explanationContent: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  explanationText: {
+    flex: 1,
+  },
+  explanationTitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
+  },
+  explanationBody: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+    lineHeight: Typography.fontSize.sm * 1.5,
   },
   headerTitle: {
     fontSize: Typography.fontSize['4xl'],

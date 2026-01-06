@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MenuButton } from '@/components/menu-button';
+import { DateRangePicker } from '@/components/date-range-picker';
 import {
   dummyTransactions,
   getTotalExpenses,
@@ -18,10 +19,15 @@ import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export default function DashboardScreen() {
-  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
+  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'custom'>('month');
+  const [customDateRange, setCustomDateRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   // Calculate current period data
-  const { start, end } = getPeriodDates(period);
+  const { start, end } = period === 'custom' && customDateRange
+    ? customDateRange
+    : getPeriodDates(period as 'today' | 'week' | 'month');
+    
   const currentTransactions = dummyTransactions.filter(
     t => t.date >= start && t.date <= end
   );
@@ -44,6 +50,11 @@ export default function DashboardScreen() {
   const insights = generateInsights(currentTransactions, previousTransactions);
   const upcomingBills = getUpcomingLiabilities();
   
+  const handleCustomDateRange = (startDate: Date, endDate: Date) => {
+    setCustomDateRange({ start: startDate, end: endDate });
+    setPeriod('custom');
+  };
+  
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
@@ -65,17 +76,37 @@ export default function DashboardScreen() {
           <TouchableOpacity
             key={p}
             style={[styles.periodButton, period === p && styles.periodButtonActive]}
-            onPress={() => setPeriod(p)}
+            onPress={() => {
+              setPeriod(p);
+              setCustomDateRange(null);
+            }}
             activeOpacity={0.7}
           >
             <ThemedText style={[
               styles.periodButtonText,
               period === p && styles.periodButtonTextActive
             ]}>
-              {p.charAt(0).toUpperCase() + p.slice(1)}
+              {p === 'today' ? 'Today' : p === 'week' ? 'Week' : 'Month'}
             </ThemedText>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          style={[styles.periodButton, period === 'custom' && styles.periodButtonActive]}
+          onPress={() => setShowDatePicker(true)}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons 
+            name="date-range" 
+            size={16} 
+            color={period === 'custom' ? Colors.text.inverse : Colors.text.secondary} 
+          />
+          <ThemedText style={[
+            styles.periodButtonText,
+            period === 'custom' && styles.periodButtonTextActive
+          ]}>
+            Custom
+          </ThemedText>
+        </TouchableOpacity>
       </View>
 
       {/* Main Metrics Grid */}
@@ -205,6 +236,14 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </Link>
       </View>
+
+      {/* Date Range Picker Modal */}
+      {showDatePicker && (
+        <DateRangePicker
+          onDateRangeSelect={handleCustomDateRange}
+          onClose={() => setShowDatePicker(false)}
+        />
+      )}
     </ScrollView>
   );
 }
