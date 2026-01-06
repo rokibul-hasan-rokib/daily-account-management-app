@@ -1,9 +1,13 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Card } from '@/components/ui/card';
+import { MenuButton } from '@/components/menu-button';
 import { dummyTransactions, getTotalExpenses, getTotalIncome } from '@/data/dummy-data';
 import { formatCurrency, getCategoryColor, getCategoryLabel, getPeriodDates } from '@/utils/helpers';
+import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export default function ProfitLossScreen() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
@@ -34,13 +38,19 @@ export default function ProfitLossScreen() {
     .sort((a, b) => b[1] - a[1]);
 
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
-        <ThemedText type="title" style={styles.headerTitle}>Profit & Loss</ThemedText>
-        <ThemedText style={styles.headerSubtitle}>
-          Income minus expenses for the period
-        </ThemedText>
-      </ThemedView>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MenuButton />
+          <View>
+            <ThemedText type="title" style={styles.headerTitle}>Profit & Loss</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>
+              Income vs expenses analysis
+            </ThemedText>
+          </View>
+        </View>
+      </View>
 
       {/* Period Filter */}
       <View style={styles.periodFilter}>
@@ -49,6 +59,7 @@ export default function ProfitLossScreen() {
             key={p}
             style={[styles.periodButton, period === p && styles.periodButtonActive]}
             onPress={() => setPeriod(p)}
+            activeOpacity={0.7}
           >
             <ThemedText style={[
               styles.periodButtonText,
@@ -61,9 +72,12 @@ export default function ProfitLossScreen() {
       </View>
 
       {/* Summary Card */}
-      <ThemedView style={styles.summaryCard}>
+      <Card variant="elevated" style={styles.summaryCard}>
         <View style={styles.summaryRow}>
-          <ThemedText style={styles.summaryLabel}>Total Income</ThemedText>
+          <View style={styles.summaryLabelContainer}>
+            <MaterialIcons name="trending-up" size={20} color={Colors.success.main} />
+            <ThemedText style={styles.summaryLabel}>Total Income</ThemedText>
+          </View>
           <ThemedText style={[styles.summaryValue, styles.incomeValue]}>
             {formatCurrency(totalIncome)}
           </ThemedText>
@@ -72,7 +86,10 @@ export default function ProfitLossScreen() {
         <View style={styles.divider} />
 
         <View style={styles.summaryRow}>
-          <ThemedText style={styles.summaryLabel}>Total Expenses</ThemedText>
+          <View style={styles.summaryLabelContainer}>
+            <MaterialIcons name="trending-down" size={20} color={Colors.error.main} />
+            <ThemedText style={styles.summaryLabel}>Total Expenses</ThemedText>
+          </View>
           <ThemedText style={[styles.summaryValue, styles.expenseValue]}>
             {formatCurrency(totalExpenses)}
           </ThemedText>
@@ -81,9 +98,16 @@ export default function ProfitLossScreen() {
         <View style={[styles.divider, styles.dividerThick]} />
 
         <View style={styles.summaryRow}>
-          <ThemedText style={[styles.summaryLabel, styles.profitLabel]}>
-            Profit / Loss
-          </ThemedText>
+          <View style={styles.summaryLabelContainer}>
+            <MaterialIcons 
+              name={profitLoss >= 0 ? "check-circle" : "cancel"} 
+              size={24} 
+              color={profitLoss >= 0 ? Colors.success.main : Colors.error.main} 
+            />
+            <ThemedText style={[styles.summaryLabel, styles.profitLabel]}>
+              Net Profit / Loss
+            </ThemedText>
+          </View>
           <ThemedText style={[
             styles.summaryValue,
             styles.profitValue,
@@ -92,63 +116,77 @@ export default function ProfitLossScreen() {
             {formatCurrency(profitLoss)}
           </ThemedText>
         </View>
-      </ThemedView>
+      </Card>
 
       {/* Income Breakdown */}
-      <ThemedView style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>
-          Income Breakdown
-        </ThemedText>
-        {incomeCategories.map(([category, amount]) => (
-          <View key={category} style={styles.categoryRow}>
-            <View style={styles.categoryInfo}>
-              <View style={[
-                styles.categoryDot,
-                { backgroundColor: getCategoryColor(category) }
-              ]} />
-              <ThemedText style={styles.categoryName}>
-                {getCategoryLabel(category)}
-              </ThemedText>
-            </View>
-            <View style={styles.categoryAmountContainer}>
-              <ThemedText style={styles.categoryAmount}>
-                {formatCurrency(amount)}
-              </ThemedText>
-              <ThemedText style={styles.categoryPercentage}>
-                {((amount / totalIncome) * 100).toFixed(0)}%
-              </ThemedText>
-            </View>
+      {incomeCategories.length > 0 && (
+        <Card variant="elevated" style={styles.section}>
+          <View style={styles.sectionTitleContainer}>
+            <MaterialIcons name="account-balance-wallet" size={20} color={Colors.success.main} />
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Income Breakdown
+            </ThemedText>
           </View>
-        ))}
-      </ThemedView>
+          <View style={styles.categoriesList}>
+            {incomeCategories.map(([category, amount]) => (
+              <View key={category} style={styles.categoryRow}>
+                <View style={styles.categoryInfo}>
+                  <View style={[
+                    styles.categoryDot,
+                    { backgroundColor: getCategoryColor(category) }
+                  ]} />
+                  <ThemedText style={styles.categoryName}>
+                    {getCategoryLabel(category)}
+                  </ThemedText>
+                </View>
+                <View style={styles.categoryAmountContainer}>
+                  <ThemedText style={styles.categoryAmount}>
+                    {formatCurrency(amount)}
+                  </ThemedText>
+                  <ThemedText style={styles.categoryPercentage}>
+                    {((amount / totalIncome) * 100).toFixed(0)}%
+                  </ThemedText>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
+      )}
 
       {/* Expenses Breakdown */}
-      <ThemedView style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>
-          Expenses Breakdown
-        </ThemedText>
-        {expenseCategories.map(([category, amount]) => (
-          <View key={category} style={styles.categoryRow}>
-            <View style={styles.categoryInfo}>
-              <View style={[
-                styles.categoryDot,
-                { backgroundColor: getCategoryColor(category) }
-              ]} />
-              <ThemedText style={styles.categoryName}>
-                {getCategoryLabel(category)}
-              </ThemedText>
-            </View>
-            <View style={styles.categoryAmountContainer}>
-              <ThemedText style={styles.categoryAmount}>
-                {formatCurrency(amount)}
-              </ThemedText>
-              <ThemedText style={styles.categoryPercentage}>
-                {((amount / totalExpenses) * 100).toFixed(0)}%
-              </ThemedText>
-            </View>
+      {expenseCategories.length > 0 && (
+        <Card variant="elevated" style={styles.section}>
+          <View style={styles.sectionTitleContainer}>
+            <MaterialIcons name="shopping-cart" size={20} color={Colors.error.main} />
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Expenses Breakdown
+            </ThemedText>
           </View>
-        ))}
-      </ThemedView>
+          <View style={styles.categoriesList}>
+            {expenseCategories.map(([category, amount]) => (
+              <View key={category} style={styles.categoryRow}>
+                <View style={styles.categoryInfo}>
+                  <View style={[
+                    styles.categoryDot,
+                    { backgroundColor: getCategoryColor(category) }
+                  ]} />
+                  <ThemedText style={styles.categoryName}>
+                    {getCategoryLabel(category)}
+                  </ThemedText>
+                </View>
+                <View style={styles.categoryAmountContainer}>
+                  <ThemedText style={styles.categoryAmount}>
+                    {formatCurrency(amount)}
+                  </ThemedText>
+                  <ThemedText style={styles.categoryPercentage}>
+                    {((amount / totalExpenses) * 100).toFixed(0)}%
+                  </ThemedText>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
+      )}
     </ScrollView>
   );
 }
@@ -156,118 +194,134 @@ export default function ProfitLossScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray[50],
   },
   header: {
-    padding: 20,
+    paddingHorizontal: Spacing.lg,
     paddingTop: 60,
+    paddingBottom: Spacing.md,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: Typography.fontSize['4xl'],
+    fontWeight: Typography.fontWeight.bold,
+    marginBottom: Spacing.xs,
+    color: Colors.text.primary,
   },
   headerSubtitle: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
   },
   periodFilter: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 20,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   periodButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: Colors.background.light,
+    ...Shadows.sm,
   },
   periodButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: Colors.primary[500],
   },
   periodButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.secondary,
   },
   periodButtonTextActive: {
-    color: '#ffffff',
+    color: Colors.text.inverse,
   },
   summaryCard: {
-    margin: 20,
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: Spacing.md,
+  },
+  summaryLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flex: 1,
   },
   summaryLabel: {
-    fontSize: 16,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
   },
   summaryValue: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
   },
   incomeValue: {
-    color: '#10b981',
+    color: Colors.success.main,
   },
   expenseValue: {
-    color: '#ef4444',
+    color: Colors.error.main,
   },
   divider: {
     height: 1,
-    backgroundColor: '#e2e8f0',
-    marginVertical: 8,
+    backgroundColor: Colors.gray[200],
+    marginVertical: Spacing.sm,
   },
   dividerThick: {
     height: 2,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: Colors.gray[300],
+    marginVertical: Spacing.md,
   },
   profitLabel: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
   },
   profitValue: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: Typography.fontSize['3xl'],
+    fontWeight: Typography.fontWeight.extrabold,
   },
   profitPositive: {
-    color: '#10b981',
+    color: Colors.success.main,
   },
   profitNegative: {
-    color: '#ef4444',
+    color: Colors.error.main,
   },
   section: {
-    margin: 20,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
-    marginBottom: 16,
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+  },
+  categoriesList: {
+    gap: Spacing.md,
   },
   categoryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Colors.gray[200],
   },
   categoryInfo: {
     flexDirection: 'row',
@@ -278,21 +332,23 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   categoryName: {
-    fontSize: 16,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.primary,
   },
   categoryAmountContainer: {
     alignItems: 'flex-end',
   },
   categoryAmount: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
     marginBottom: 2,
   },
   categoryPercentage: {
-    fontSize: 12,
-    color: '#64748b',
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.secondary,
   },
 });

@@ -1,11 +1,16 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { MenuButton } from '@/components/menu-button';
 import { dummyLiabilities } from '@/data/dummy-data';
 import { formatCurrency, formatDate } from '@/utils/helpers';
+import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-export default function BillsScreen() {
+export default function BillsScreen() {  
   const [filter, setFilter] = useState<'all' | 'unpaid' | 'paid' | 'overdue'>('all');
 
   const filteredBills = dummyLiabilities
@@ -18,25 +23,38 @@ export default function BillsScreen() {
 
   return (
     <View style={styles.container}>
-      <ThemedView style={styles.header}>
-        <View>
-          <ThemedText type="title" style={styles.headerTitle}>Bills & Liabilities</ThemedText>
-          <ThemedText style={styles.headerSubtitle}>
-            Total unpaid: {formatCurrency(totalUnpaid)}
-          </ThemedText>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerTop}>
+            <MenuButton />
+            <ThemedText type="title" style={styles.headerTitle}>Bills & Liabilities</ThemedText>
+          </View>
+          <View style={styles.headerSubtitleContainer}>
+            <MaterialIcons name="warning" size={16} color={Colors.error.main} />
+            <ThemedText style={styles.headerSubtitle}>
+              Total unpaid: {formatCurrency(totalUnpaid)}
+            </ThemedText>
+          </View>
         </View>
         <TouchableOpacity style={styles.addButton}>
-          <ThemedText style={styles.addButtonText}>+ Add</ThemedText>
+          <MaterialIcons name="add" size={24} color={Colors.text.inverse} />
         </TouchableOpacity>
-      </ThemedView>
+      </View>
 
       {/* Filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        style={styles.filterContainer}
+        contentContainerStyle={styles.filterContent}
+      >
         {(['all', 'unpaid', 'overdue', 'paid'] as const).map((f) => (
           <TouchableOpacity
             key={f}
             style={[styles.filterButton, filter === f && styles.filterButtonActive]}
             onPress={() => setFilter(f)}
+            activeOpacity={0.7}
           >
             <ThemedText style={[
               styles.filterButtonText,
@@ -49,61 +67,70 @@ export default function BillsScreen() {
       </ScrollView>
 
       {/* Bills List */}
-      <ScrollView style={styles.list}>
+      <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
         {filteredBills.map((bill) => (
-          <TouchableOpacity key={bill.id} style={styles.billCard}>
-            <View style={[
-              styles.statusIndicator,
-              bill.status === 'paid' && styles.statusPaid,
-              bill.status === 'unpaid' && styles.statusUnpaid,
-              bill.status === 'overdue' && styles.statusOverdue,
-            ]} />
-
+          <Card key={bill.id} variant="elevated" style={styles.billCard}>
             <View style={styles.billContent}>
               <View style={styles.billHeader}>
-                <ThemedText style={styles.billName}>{bill.name}</ThemedText>
+                <View style={styles.billTitleContainer}>
+                  <MaterialIcons 
+                    name="receipt" 
+                    size={20} 
+                    color={bill.status === 'overdue' ? Colors.error.main : Colors.primary[600]} 
+                  />
+                  <ThemedText style={styles.billName}>{bill.name}</ThemedText>
+                </View>
                 <ThemedText style={styles.billAmount}>
                   {formatCurrency(bill.amount)}
                 </ThemedText>
               </View>
 
               <View style={styles.billMeta}>
-                <View style={[
-                  styles.statusBadge,
-                  bill.status === 'overdue' && styles.statusBadgeOverdue,
-                ]}>
+                <Badge
+                  label={bill.status === 'overdue' ? 'OVERDUE' : 
+                         bill.status === 'paid' ? 'PAID' : 'UNPAID'}
+                  variant={bill.status === 'overdue' ? 'error' : 
+                          bill.status === 'paid' ? 'success' : 'warning'}
+                />
+                <View style={styles.dueDateContainer}>
+                  <MaterialIcons 
+                    name="calendar-today" 
+                    size={14} 
+                    color={bill.status === 'overdue' ? Colors.error.main : Colors.text.secondary} 
+                  />
                   <ThemedText style={[
-                    styles.statusText,
-                    bill.status === 'overdue' && styles.statusTextOverdue,
+                    styles.dueDate,
+                    bill.status === 'overdue' && styles.dueDateOverdue
                   ]}>
-                    {bill.status === 'overdue' ? 'OVERDUE' : 
-                     bill.status === 'paid' ? 'PAID' : 'UNPAID'}
+                    Due: {formatDate(bill.dueDate)}
                   </ThemedText>
                 </View>
-                <ThemedText style={[
-                  styles.dueDate,
-                  bill.status === 'overdue' && styles.dueDateOverdue,
-                ]}>
-                  Due: {formatDate(bill.dueDate)}
-                </ThemedText>
               </View>
 
               {bill.notes && (
-                <ThemedText style={styles.billNotes}>{bill.notes}</ThemedText>
+                <View style={styles.notesContainer}>
+                  <MaterialIcons name="notes" size={16} color={Colors.text.secondary} />
+                  <ThemedText style={styles.billNotes}>{bill.notes}</ThemedText>
+                </View>
               )}
 
               {bill.status === 'unpaid' && (
                 <TouchableOpacity style={styles.markPaidButton}>
+                  <MaterialIcons name="check-circle" size={18} color={Colors.text.inverse} />
                   <ThemedText style={styles.markPaidText}>Mark as Paid</ThemedText>
                 </TouchableOpacity>
               )}
             </View>
-          </TouchableOpacity>
+          </Card>
         ))}
 
         {filteredBills.length === 0 && (
           <View style={styles.emptyState}>
-            <ThemedText style={styles.emptyText}>No bills found</ThemedText>
+            <MaterialIcons name="receipt-long" size={64} color={Colors.text.tertiary} />
+            <ThemedText style={styles.emptyTitle}>No bills found</ThemedText>
+            <ThemedText style={styles.emptyText}>
+              {filter !== 'all' ? 'Try adjusting your filter' : 'Add your first bill to get started'}
+            </ThemedText>
           </View>
         )}
       </ScrollView>
@@ -114,162 +141,171 @@ export default function BillsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray[50],
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: 20,
+    paddingHorizontal: Spacing.lg,
     paddingTop: 60,
+    paddingBottom: Spacing.md,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.xs,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: Typography.fontSize['4xl'],
+    fontWeight: Typography.fontWeight.bold,
+    marginBottom: Spacing.xs,
+    color: Colors.text.primary,
+  },
+  headerSubtitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#ef4444',
-    fontWeight: '600',
+    fontSize: Typography.fontSize.sm,
+    color: Colors.error.main,
+    fontWeight: Typography.fontWeight.semibold,
   },
   addButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  addButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.md,
   },
   filterContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: Spacing.md,
+  },
+  filterContent: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
   },
   filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
-    marginRight: 12,
+    backgroundColor: Colors.background.light,
+    ...Shadows.sm,
   },
   filterButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: Colors.primary[500],
   },
   filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.secondary,
   },
   filterButtonTextActive: {
-    color: '#ffffff',
+    color: Colors.text.inverse,
   },
   list: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.lg,
   },
   billCard: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statusIndicator: {
-    width: 6,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-  },
-  statusPaid: {
-    backgroundColor: '#10b981',
-  },
-  statusUnpaid: {
-    backgroundColor: '#f59e0b',
-  },
-  statusOverdue: {
-    backgroundColor: '#ef4444',
+    marginBottom: Spacing.md,
+    padding: Spacing.lg,
   },
   billContent: {
-    flex: 1,
-    padding: 16,
+    gap: Spacing.md,
   },
   billHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+  },
+  billTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flex: 1,
   },
   billName: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
     flex: 1,
-    marginRight: 12,
   },
   billAmount: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#1e293b',
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.extrabold,
+    color: Colors.text.primary,
   },
   billMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
+    gap: Spacing.md,
+    flexWrap: 'wrap',
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#f1f5f9',
-  },
-  statusBadgeOverdue: {
-    backgroundColor: '#fee2e2',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  statusTextOverdue: {
-    color: '#ef4444',
+  dueDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
   dueDate: {
-    fontSize: 14,
-    color: '#64748b',
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
   },
   dueDateOverdue: {
-    color: '#ef4444',
-    fontWeight: '600',
+    color: Colors.error.main,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  notesContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    backgroundColor: Colors.gray[100],
+    padding: Spacing.md,
+    borderRadius: 8,
   },
   billNotes: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 12,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+    flex: 1,
+    lineHeight: Typography.fontSize.sm * Typography.lineHeight.normal,
   },
   markPaidButton: {
-    backgroundColor: '#10b981',
-    paddingVertical: 10,
-    borderRadius: 8,
+    backgroundColor: Colors.success.main,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    borderRadius: 12,
+    gap: Spacing.sm,
   },
   markPaidText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+    color: Colors.text.inverse,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: Spacing['3xl'],
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#94a3b8',
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
+    textAlign: 'center',
   },
 });

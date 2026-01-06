@@ -1,9 +1,14 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { MenuButton } from '@/components/menu-button';
 import { dummyReceiptItems, dummyReceipts } from '@/data/dummy-data';
 import { formatCurrency, formatDate, getPeriodDates } from '@/utils/helpers';
+import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 interface ItemSummary {
   itemName: string;
@@ -121,13 +126,19 @@ export default function ItemAnalyticsScreen() {
   const totalSpend = itemAnalytics.reduce((sum, item) => sum + item.totalSpend, 0);
 
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
-        <ThemedText type="title" style={styles.headerTitle}>Item Analytics</ThemedText>
-        <ThemedText style={styles.headerSubtitle}>
-          Track spending on individual items
-        </ThemedText>
-      </ThemedView>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MenuButton />
+          <View>
+            <ThemedText type="title" style={styles.headerTitle}>Item Analytics</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>
+              Track spending on individual items
+            </ThemedText>
+          </View>
+        </View>
+      </View>
 
       {/* Period Filter */}
       <View style={styles.periodFilter}>
@@ -136,6 +147,7 @@ export default function ItemAnalyticsScreen() {
             key={p}
             style={[styles.periodButton, period === p && styles.periodButtonActive]}
             onPress={() => setPeriod(p)}
+            activeOpacity={0.7}
           >
             <ThemedText style={[
               styles.periodButtonText,
@@ -148,129 +160,158 @@ export default function ItemAnalyticsScreen() {
       </View>
 
       {/* Total Spend Card */}
-      <ThemedView style={styles.totalCard}>
-        <ThemedText style={styles.totalLabel}>Total Item Spend</ThemedText>
-        <ThemedText style={styles.totalValue}>{formatCurrency(totalSpend)}</ThemedText>
-        <ThemedText style={styles.totalSubtext}>
-          Across {itemAnalytics.length} different items
-        </ThemedText>
-      </ThemedView>
+      <Card variant="elevated" style={styles.totalCard}>
+        <View style={styles.totalCardContent}>
+          <MaterialIcons name="shopping-bag" size={32} color={Colors.text.inverse} />
+          <ThemedText style={styles.totalLabel}>Total Item Spend</ThemedText>
+          <ThemedText style={styles.totalValue}>{formatCurrency(totalSpend)}</ThemedText>
+          <ThemedText style={styles.totalSubtext}>
+            Across {itemAnalytics.length} different items
+          </ThemedText>
+        </View>
+      </Card>
 
       {/* Search */}
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search items (e.g., Beef, Milk)..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#94a3b8"
-        />
+        <View style={styles.searchWrapper}>
+          <MaterialIcons name="search" size={20} color={Colors.text.secondary} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search items (e.g., Beef, Milk)..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor={Colors.text.tertiary}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <MaterialIcons name="close" size={20} color={Colors.text.secondary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Top Items Summary */}
-      <ThemedView style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>
-          Top Items by Spend
-        </ThemedText>
-        {topItems.map((item, index) => (
-          <View key={item.itemName} style={styles.itemCard}>
-            <View style={styles.itemRank}>
-              <ThemedText style={styles.rankText}>#{index + 1}</ThemedText>
-            </View>
-
-            <View style={styles.itemContent}>
-              <View style={styles.itemHeader}>
-                <ThemedText style={styles.itemName}>{item.itemName}</ThemedText>
-                <View style={[
-                  styles.trendBadge,
-                  item.trend === 'up' && styles.trendUp,
-                  item.trend === 'down' && styles.trendDown,
-                ]}>
-                  <ThemedText style={styles.trendText}>
-                    {item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→'} 
-                    {item.trendPercentage.toFixed(0)}%
-                  </ThemedText>
-                </View>
-              </View>
-
-              <View style={styles.itemStats}>
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statLabel}>Total Spend</ThemedText>
-                  <ThemedText style={styles.statValue}>
-                    {formatCurrency(item.totalSpend)}
-                  </ThemedText>
-                </View>
-
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statLabel}>Quantity</ThemedText>
-                  <ThemedText style={styles.statValue}>
-                    {item.totalQuantity.toFixed(1)}
-                  </ThemedText>
-                </View>
-
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statLabel}>Avg Price</ThemedText>
-                  <ThemedText style={styles.statValue}>
-                    {formatCurrency(item.averagePrice)}
-                  </ThemedText>
-                </View>
-              </View>
-
-              <View style={styles.itemMeta}>
-                <ThemedText style={styles.itemMetaText}>
-                  {item.percentageOfTotal.toFixed(1)}% of total spend
-                </ThemedText>
-                <ThemedText style={styles.itemMetaSeparator}>•</ThemedText>
-                <ThemedText style={styles.itemMetaText}>
-                  {item.transactionCount} purchase{item.transactionCount !== 1 ? 's' : ''}
-                </ThemedText>
-              </View>
-
-              <ThemedText style={styles.lastPurchase}>
-                Last purchased: {formatDate(item.lastPurchase)}
-              </ThemedText>
-            </View>
+      {topItems.length > 0 && (
+        <Card variant="elevated" style={styles.section}>
+          <View style={styles.sectionTitleContainer}>
+            <MaterialIcons name="star" size={20} color={Colors.warning.main} />
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Top Items by Spend
+            </ThemedText>
           </View>
-        ))}
-      </ThemedView>
+          <View style={styles.itemsList}>
+            {topItems.map((item, index) => (
+              <View key={item.itemName} style={styles.itemCard}>
+                <View style={styles.itemRank}>
+                  <View style={[
+                    styles.rankCircle,
+                    index === 0 && styles.rankCircleGold,
+                    index === 1 && styles.rankCircleSilver,
+                    index === 2 && styles.rankCircleBronze,
+                  ]}>
+                    <ThemedText style={styles.rankText}>#{index + 1}</ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.itemContent}>
+                  <View style={styles.itemHeader}>
+                    <ThemedText style={styles.itemName}>{item.itemName}</ThemedText>
+                    <Badge
+                      label={`${item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→'} ${item.trendPercentage.toFixed(0)}%`}
+                      variant={item.trend === 'up' ? 'error' : item.trend === 'down' ? 'success' : 'default'}
+                      size="sm"
+                    />
+                  </View>
+
+                  <View style={styles.itemStats}>
+                    <View style={styles.statItem}>
+                      <MaterialIcons name="attach-money" size={16} color={Colors.text.secondary} />
+                      <ThemedText style={styles.statLabel}>Total</ThemedText>
+                      <ThemedText style={styles.statValue}>
+                        {formatCurrency(item.totalSpend)}
+                      </ThemedText>
+                    </View>
+
+                    <View style={styles.statItem}>
+                      <MaterialIcons name="inventory" size={16} color={Colors.text.secondary} />
+                      <ThemedText style={styles.statLabel}>Quantity</ThemedText>
+                      <ThemedText style={styles.statValue}>
+                        {item.totalQuantity.toFixed(1)}
+                      </ThemedText>
+                    </View>
+
+                    <View style={styles.statItem}>
+                      <MaterialIcons name="calculate" size={16} color={Colors.text.secondary} />
+                      <ThemedText style={styles.statLabel}>Avg Price</ThemedText>
+                      <ThemedText style={styles.statValue}>
+                        {formatCurrency(item.averagePrice)}
+                      </ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.itemMeta}>
+                    <ThemedText style={styles.itemMetaText}>
+                      {item.percentageOfTotal.toFixed(1)}% of total spend
+                    </ThemedText>
+                    <View style={styles.metaSeparator} />
+                    <ThemedText style={styles.itemMetaText}>
+                      {item.transactionCount} purchase{item.transactionCount !== 1 ? 's' : ''}
+                    </ThemedText>
+                  </View>
+
+                  <View style={styles.lastPurchaseContainer}>
+                    <MaterialIcons name="schedule" size={14} color={Colors.text.tertiary} />
+                    <ThemedText style={styles.lastPurchase}>
+                      Last purchased: {formatDate(item.lastPurchase)}
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
+      )}
 
       {/* All Items List */}
-      {searchQuery && (
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Search Results ({filteredItems.length})
-          </ThemedText>
-          {filteredItems.map((item) => (
-            <View key={item.itemName} style={styles.compactItemRow}>
-              <View style={styles.compactItemInfo}>
-                <ThemedText style={styles.compactItemName}>{item.itemName}</ThemedText>
-                <ThemedText style={styles.compactItemMeta}>
-                  Qty: {item.totalQuantity.toFixed(1)} • {item.transactionCount} purchase{item.transactionCount !== 1 ? 's' : ''}
-                </ThemedText>
-              </View>
-              <View style={styles.compactItemAmount}>
-                <ThemedText style={styles.compactItemSpend}>
-                  {formatCurrency(item.totalSpend)}
-                </ThemedText>
-                <View style={[
-                  styles.compactTrendBadge,
-                  item.trend === 'up' && styles.trendUp,
-                  item.trend === 'down' && styles.trendDown,
-                ]}>
-                  <ThemedText style={styles.compactTrendText}>
-                    {item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→'} 
-                    {item.trendPercentage.toFixed(0)}%
+      {searchQuery && filteredItems.length > 0 && (
+        <Card variant="elevated" style={styles.section}>
+          <View style={styles.sectionTitleContainer}>
+            <MaterialIcons name="list" size={20} color={Colors.primary[600]} />
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Search Results ({filteredItems.length})
+            </ThemedText>
+          </View>
+          <View style={styles.compactList}>
+            {filteredItems.map((item) => (
+              <View key={item.itemName} style={styles.compactItemRow}>
+                <View style={styles.compactItemInfo}>
+                  <ThemedText style={styles.compactItemName}>{item.itemName}</ThemedText>
+                  <ThemedText style={styles.compactItemMeta}>
+                    Qty: {item.totalQuantity.toFixed(1)} • {item.transactionCount} purchase{item.transactionCount !== 1 ? 's' : ''}
                   </ThemedText>
                 </View>
+                <View style={styles.compactItemAmount}>
+                  <ThemedText style={styles.compactItemSpend}>
+                    {formatCurrency(item.totalSpend)}
+                  </ThemedText>
+                  <Badge
+                    label={`${item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→'} ${item.trendPercentage.toFixed(0)}%`}
+                    variant={item.trend === 'up' ? 'error' : item.trend === 'down' ? 'success' : 'default'}
+                    size="sm"
+                  />
+                </View>
               </View>
-            </View>
-          ))}
-        </ThemedView>
+            ))}
+          </View>
+        </Card>
       )}
 
       {/* Info Box */}
-      <ThemedView style={styles.infoBox}>
-        <ThemedText style={styles.infoTitle}>💡 How this works</ThemedText>
+      <Card variant="outlined" style={styles.infoBox}>
+        <View style={styles.infoHeader}>
+          <MaterialIcons name="info" size={20} color={Colors.warning.main} />
+          <ThemedText style={styles.infoTitle}>How this works</ThemedText>
+        </View>
         <ThemedText style={styles.infoText}>
           Item analytics tracks individual products from your receipts. 
           When you scan receipts (coming soon), each line item is tracked separately, 
@@ -279,7 +320,7 @@ export default function ItemAnalyticsScreen() {
         <ThemedText style={styles.infoText}>
           Example: "Beef cost increased 22% this month vs last month."
         </ThemedText>
-      </ThemedView>
+      </Card>
     </ScrollView>
   );
 }
@@ -287,111 +328,153 @@ export default function ItemAnalyticsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray[50],
   },
   header: {
-    padding: 20,
+    paddingHorizontal: Spacing.lg,
     paddingTop: 60,
+    paddingBottom: Spacing.md,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: Typography.fontSize['4xl'],
+    fontWeight: Typography.fontWeight.bold,
+    marginBottom: Spacing.xs,
+    color: Colors.text.primary,
   },
   headerSubtitle: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
   },
   periodFilter: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 20,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   periodButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: Colors.background.light,
+    ...Shadows.sm,
   },
   periodButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: Colors.primary[500],
   },
   periodButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.secondary,
   },
   periodButtonTextActive: {
-    color: '#ffffff',
+    color: Colors.text.inverse,
   },
   totalCard: {
-    margin: 20,
-    marginTop: 0,
-    padding: 24,
-    borderRadius: 16,
-    backgroundColor: '#8b5cf6',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.xl,
+    backgroundColor: Colors.primary[500],
+  },
+  totalCardContent: {
     alignItems: 'center',
   },
   totalLabel: {
-    fontSize: 14,
-    color: '#ffffff',
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.inverse,
     opacity: 0.9,
-    marginBottom: 8,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   totalValue: {
-    fontSize: 40,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginBottom: 4,
+    fontSize: Typography.fontSize['4xl'],
+    fontWeight: Typography.fontWeight.extrabold,
+    color: Colors.text.inverse,
+    marginBottom: Spacing.xs,
   },
   totalSubtext: {
-    fontSize: 13,
-    color: '#ffffff',
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.inverse,
     opacity: 0.8,
   },
   searchContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background.light,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    ...Shadows.sm,
+  },
+  searchIcon: {
+    marginRight: Spacing.sm,
   },
   searchInput: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
+    flex: 1,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.primary,
+    paddingVertical: 0,
   },
   section: {
-    margin: 20,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
-    marginBottom: 16,
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+  },
+  itemsList: {
+    gap: Spacing.md,
   },
   itemCard: {
     flexDirection: 'row',
-    backgroundColor: '#f8fafc',
+    backgroundColor: Colors.gray[100],
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
   itemRank: {
-    width: 40,
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingTop: 4,
   },
+  rankCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.gray[300],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankCircleGold: {
+    backgroundColor: Colors.warning.light,
+  },
+  rankCircleSilver: {
+    backgroundColor: Colors.gray[300],
+  },
+  rankCircleBronze: {
+    backgroundColor: '#FED7AA',
+  },
   rankText: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#3b82f6',
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.extrabold,
+    color: Colors.text.primary,
   },
   itemContent: {
     flex: 1,
@@ -400,122 +483,114 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   itemName: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
     flex: 1,
-    marginRight: 8,
-  },
-  trendBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#e2e8f0',
-  },
-  trendUp: {
-    backgroundColor: '#fee2e2',
-  },
-  trendDown: {
-    backgroundColor: '#d1fae5',
-  },
-  trendText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748b',
+    marginRight: Spacing.sm,
   },
   itemStats: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
   },
   statItem: {
     flex: 1,
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
   statLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    marginBottom: 4,
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.secondary,
   },
   statValue: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
   },
   itemMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: Spacing.sm,
   },
   itemMetaText: {
-    fontSize: 13,
-    color: '#64748b',
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.secondary,
   },
-  itemMetaSeparator: {
-    marginHorizontal: 8,
-    color: '#cbd5e1',
+  metaSeparator: {
+    marginHorizontal: Spacing.sm,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.gray[300],
+  },
+  lastPurchaseContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
   lastPurchase: {
-    fontSize: 12,
-    color: '#94a3b8',
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.tertiary,
+  },
+  compactList: {
+    gap: Spacing.md,
   },
   compactItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Colors.gray[200],
   },
   compactItemInfo: {
     flex: 1,
   },
   compactItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
   },
   compactItemMeta: {
-    fontSize: 13,
-    color: '#64748b',
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.secondary,
   },
   compactItemAmount: {
     alignItems: 'flex-end',
+    gap: Spacing.xs,
   },
   compactItemSpend: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  compactTrendBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: '#e2e8f0',
-  },
-  compactTrendText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
   },
   infoBox: {
-    margin: 20,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#fffbeb',
-    borderWidth: 1,
-    borderColor: '#fef3c7',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing['2xl'],
+    padding: Spacing.lg,
+    backgroundColor: Colors.warning.light,
+    borderColor: Colors.warning.main,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   infoTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
   },
   infoText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#78716c',
-    marginBottom: 8,
+    fontSize: Typography.fontSize.sm,
+    lineHeight: Typography.fontSize.sm * Typography.lineHeight.normal,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.sm,
   },
 });

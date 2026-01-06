@@ -1,14 +1,34 @@
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { MenuButton } from '@/components/menu-button';
+import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type TransactionType = 'income' | 'expense';
 
 const categories = {
-  income: ['salary', 'freelance', 'sales', 'other-income'],
-  expense: ['groceries', 'transport', 'utilities', 'rent', 'raw-materials', 'equipment', 'marketing', 'other-expense']
+  income: [
+    { label: 'Salary', value: 'salary' },
+    { label: 'Freelance', value: 'freelance' },
+    { label: 'Sales', value: 'sales' },
+    { label: 'Investment', value: 'investment' },
+    { label: 'Other Income', value: 'other-income' },
+  ],
+  expense: [
+    { label: 'Groceries', value: 'groceries' },
+    { label: 'Transport', value: 'transport' },
+    { label: 'Utilities', value: 'utilities' },
+    { label: 'Rent', value: 'rent' },
+    { label: 'Raw Materials', value: 'raw-materials' },
+    { label: 'Equipment', value: 'equipment' },
+    { label: 'Marketing', value: 'marketing' },
+    { label: 'Other Expense', value: 'other-expense' },
+  ],
 };
 
 export default function AddTransactionScreen() {
@@ -17,112 +37,160 @@ export default function AddTransactionScreen() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [merchantName, setMerchant] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
   const handleSave = () => {
     // In real app, this would save to backend/state
-    console.log({ type, amount, description, category, merchantName });
+    console.log({ type, amount, description, category, merchantName, date });
     router.back();
   };
 
   const categoryList = categories[type];
 
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MenuButton />
+          <ThemedText type="title" style={styles.headerTitle}>Add Transaction</ThemedText>
+        </View>
         <TouchableOpacity onPress={() => router.back()}>
-          <ThemedText style={styles.cancelButton}>Cancel</ThemedText>
+          <MaterialIcons name="close" size={24} color={Colors.text.primary} />
         </TouchableOpacity>
-        <ThemedText type="subtitle">Add Transaction</ThemedText>
-        <TouchableOpacity onPress={handleSave}>
-          <ThemedText style={styles.saveButton}>Save</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
+      </View>
 
       {/* Type Toggle */}
-      <View style={styles.typeToggle}>
-        <TouchableOpacity
-          style={[styles.typeButton, type === 'income' && styles.typeButtonActive]}
-          onPress={() => setType('income')}
-        >
-          <ThemedText style={[
-            styles.typeButtonText,
-            type === 'income' && styles.typeButtonTextActive
-          ]}>
-            Income
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.typeButton, type === 'expense' && styles.typeButtonActive]}
-          onPress={() => setType('expense')}
-        >
-          <ThemedText style={[
-            styles.typeButtonText,
-            type === 'expense' && styles.typeButtonTextActive
-          ]}>
-            Expense
-          </ThemedText>
-        </TouchableOpacity>
-      </View>
-
-      {/* Amount Input */}
-      <View style={styles.formSection}>
-        <ThemedText style={styles.label}>Amount</ThemedText>
-        <View style={styles.amountInputContainer}>
-          <ThemedText style={styles.currencySymbol}>£</ThemedText>
-          <TextInput
-            style={styles.amountInput}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            value={amount}
-            onChangeText={setAmount}
-          />
+      <Card variant="elevated" style={styles.typeToggleCard}>
+        <View style={styles.typeToggle}>
+          <TouchableOpacity
+            style={[styles.typeButton, type === 'income' && styles.typeButtonActive]}
+            onPress={() => {
+              setType('income');
+              setCategory('');
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons 
+              name="trending-up" 
+              size={20} 
+              color={type === 'income' ? Colors.success.main : Colors.text.secondary} 
+            />
+            <Text style={[
+              styles.typeButtonText,
+              type === 'income' && styles.typeButtonTextActive
+            ]}>
+              Income
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeButton, type === 'expense' && styles.typeButtonActive]}
+            onPress={() => {
+              setType('expense');
+              setCategory('');
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons 
+              name="trending-down" 
+              size={20} 
+              color={type === 'expense' ? Colors.error.main : Colors.text.secondary} 
+            />
+            <Text style={[
+              styles.typeButtonText,
+              type === 'expense' && styles.typeButtonTextActive
+            ]}>
+              Expense
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      </Card>
 
-      {/* Description */}
-      <View style={styles.formSection}>
-        <ThemedText style={styles.label}>Description</ThemedText>
-        <TextInput
-          style={styles.input}
-          placeholder="What is this for?"
+      {/* Form */}
+      <View style={styles.form}>
+        {/* Amount Input */}
+        <Card variant="elevated" style={styles.amountCard}>
+          <Text style={styles.amountLabel}>Amount</Text>
+          <View style={styles.amountInputContainer}>
+            <Text style={styles.currencySymbol}>£</Text>
+            <TextInput
+              style={styles.amountInput}
+              placeholder="0.00"
+              placeholderTextColor={Colors.text.tertiary}
+              keyboardType="decimal-pad"
+              value={amount}
+              onChangeText={setAmount}
+            />
+          </View>
+        </Card>
+
+        {/* Description */}
+        <Input
+          label="Description"
+          placeholder="What is this transaction for?"
           value={description}
           onChangeText={setDescription}
+          leftIcon={<MaterialIcons name="description" size={20} color={Colors.text.secondary} />}
         />
-      </View>
 
-      {/* Category */}
-      <View style={styles.formSection}>
-        <ThemedText style={styles.label}>Category</ThemedText>
-        <View style={styles.categoryGrid}>
-          {categoryList.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.categoryChip,
-                category === cat && styles.categoryChipActive
-              ]}
-              onPress={() => setCategory(cat)}
-            >
-              <ThemedText style={[
-                styles.categoryChipText,
-                category === cat && styles.categoryChipTextActive
-              ]}>
-                {cat.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
+        {/* Category */}
+        <View style={styles.categorySection}>
+          <Text style={styles.categoryLabel}>Category</Text>
+          <View style={styles.categoryGrid}>
+            {categoryList.map((cat) => (
+              <TouchableOpacity
+                key={cat.value}
+                style={[
+                  styles.categoryChip,
+                  category === cat.value && styles.categoryChipActive
+                ]}
+                onPress={() => setCategory(cat.value)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.categoryChipText,
+                  category === cat.value && styles.categoryChipTextActive
+                ]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      </View>
 
-      {/* Merchant */}
-      <View style={styles.formSection}>
-        <ThemedText style={styles.label}>Merchant (optional)</ThemedText>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g., Tesco, Uber"
+        {/* Merchant */}
+        <Input
+          label="Merchant (Optional)"
+          placeholder="e.g., Tesco, Uber, Amazon"
           value={merchantName}
           onChangeText={setMerchant}
+          leftIcon={<MaterialIcons name="store" size={20} color={Colors.text.secondary} />}
         />
+
+        {/* Date */}
+        <Input
+          label="Date"
+          placeholder="Select date"
+          value={date}
+          onChangeText={setDate}
+          leftIcon={<MaterialIcons name="calendar-today" size={20} color={Colors.text.secondary} />}
+        />
+
+        {/* Action Buttons */}
+        <View style={styles.actions}>
+          <Button
+            title="Cancel"
+            variant="outline"
+            onPress={() => router.back()}
+            style={styles.cancelButton}
+          />
+          <Button
+            title="Save Transaction"
+            variant="primary"
+            onPress={handleSave}
+            style={styles.saveButton}
+          />
+        </View>
       </View>
     </ScrollView>
   );
@@ -131,113 +199,135 @@ export default function AddTransactionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray[50],
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: Spacing.lg,
     paddingTop: 60,
+    paddingBottom: Spacing.md,
   },
-  cancelButton: {
-    color: '#64748b',
-    fontSize: 16,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    flex: 1,
   },
-  saveButton: {
-    color: '#3b82f6',
-    fontSize: 16,
-    fontWeight: '600',
+  headerTitle: {
+    fontSize: Typography.fontSize['3xl'],
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+  },
+  typeToggleCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.sm,
   },
   typeToggle: {
     flexDirection: 'row',
-    margin: 20,
-    padding: 4,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
+    gap: Spacing.sm,
   },
   typeButton: {
     flex: 1,
-    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: 12,
+    backgroundColor: Colors.gray[100],
   },
   typeButtonActive: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: Colors.background.light,
+    ...Shadows.sm,
   },
   typeButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#64748b',
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.secondary,
   },
   typeButtonTextActive: {
-    color: '#1e293b',
+    color: Colors.text.primary,
   },
-  formSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
+  form: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing['2xl'],
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
+  amountCard: {
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    backgroundColor: Colors.primary[50],
+    borderWidth: 2,
+    borderColor: Colors.primary[200],
+  },
+  amountLabel: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.sm,
   },
   amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
   currencySymbol: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginRight: 8,
+    fontSize: Typography.fontSize['3xl'],
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    marginRight: Spacing.sm,
   },
   amountInput: {
     flex: 1,
-    fontSize: 32,
-    fontWeight: 'bold',
-    paddingVertical: 16,
+    fontSize: Typography.fontSize['3xl'],
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    paddingVertical: 0,
   },
-  input: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  categorySection: {
+    marginBottom: Spacing.md,
+  },
+  categoryLabel: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.sm,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Spacing.sm,
   },
   categoryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: Colors.gray[100],
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Colors.gray[200],
   },
   categoryChipActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: Colors.primary[500],
+    borderColor: Colors.primary[500],
   },
   categoryChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.secondary,
   },
   categoryChipTextActive: {
-    color: '#ffffff',
+    color: Colors.text.inverse,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginTop: Spacing.lg,
+  },
+  cancelButton: {
+    flex: 1,
+  },
+  saveButton: {
+    flex: 2,
   },
 });

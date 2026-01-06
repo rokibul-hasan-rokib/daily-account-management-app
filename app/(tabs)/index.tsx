@@ -1,5 +1,9 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { MenuButton } from '@/components/menu-button';
 import {
   dummyTransactions,
   getTotalExpenses,
@@ -7,9 +11,11 @@ import {
   getUpcomingLiabilities
 } from '@/data/dummy-data';
 import { formatCurrency, generateInsights, getPeriodDates } from '@/utils/helpers';
+import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { Link } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export default function DashboardScreen() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
@@ -39,13 +45,19 @@ export default function DashboardScreen() {
   const upcomingBills = getUpcomingLiabilities();
   
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
-        <ThemedText type="title" style={styles.headerTitle}>Cash Flow</ThemedText>
-        <ThemedText style={styles.headerSubtitle}>
-          Quick snapshot of your finances
-        </ThemedText>
-      </ThemedView>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MenuButton />
+          <View>
+            <ThemedText type="title" style={styles.headerTitle}>Dashboard</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>
+              Overview of your finances
+            </ThemedText>
+          </View>
+        </View>
+      </View>
 
       {/* Period Filter */}
       <View style={styles.periodFilter}>
@@ -54,6 +66,7 @@ export default function DashboardScreen() {
             key={p}
             style={[styles.periodButton, period === p && styles.periodButtonActive]}
             onPress={() => setPeriod(p)}
+            activeOpacity={0.7}
           >
             <ThemedText style={[
               styles.periodButtonText,
@@ -65,87 +78,130 @@ export default function DashboardScreen() {
         ))}
       </View>
 
-      {/* Main Metrics */}
+      {/* Main Metrics Grid */}
       <View style={styles.metricsGrid}>
-        <View style={[styles.metricCard, styles.incomeCard]}>
-          <ThemedText style={styles.metricLabel}>Money In</ThemedText>
-          <ThemedText style={styles.metricValue}>{formatCurrency(totalIncome)}</ThemedText>
-        </View>
+        <Card variant="elevated" style={styles.metricCard}>
+          <View style={styles.metricHeader}>
+            <View style={[styles.metricIconContainer, { backgroundColor: Colors.success.light }]}>
+              <MaterialIcons name="trending-up" size={24} color={Colors.success.main} />
+            </View>
+            <ThemedText style={styles.metricLabel}>Money In</ThemedText>
+          </View>
+          <ThemedText style={[styles.metricValue, { color: Colors.success.main }]}>
+            {formatCurrency(totalIncome)}
+          </ThemedText>
+        </Card>
         
-        <View style={[styles.metricCard, styles.expenseCard]}>
-          <ThemedText style={styles.metricLabel}>Money Out</ThemedText>
-          <ThemedText style={styles.metricValue}>{formatCurrency(totalExpenses)}</ThemedText>
-        </View>
+        <Card variant="elevated" style={styles.metricCard}>
+          <View style={styles.metricHeader}>
+            <View style={[styles.metricIconContainer, { backgroundColor: Colors.error.light }]}>
+              <MaterialIcons name="trending-down" size={24} color={Colors.error.main} />
+            </View>
+            <ThemedText style={styles.metricLabel}>Money Out</ThemedText>
+          </View>
+          <ThemedText style={[styles.metricValue, { color: Colors.error.main }]}>
+            {formatCurrency(totalExpenses)}
+          </ThemedText>
+        </Card>
         
-        <View style={[styles.metricCard, styles.balanceCard]}>
-          <ThemedText style={styles.metricLabel}>Balance</ThemedText>
+        <Card variant="elevated" style={styles.metricCard}>
+          <View style={styles.metricHeader}>
+            <View style={[styles.metricIconContainer, { backgroundColor: Colors.info.light }]}>
+              <MaterialIcons name="account-balance-wallet" size={24} color={Colors.info.main} />
+            </View>
+            <ThemedText style={styles.metricLabel}>Balance</ThemedText>
+          </View>
           <ThemedText style={[
             styles.metricValue,
-            balance >= 0 ? styles.positiveValue : styles.negativeValue
+            balance >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
           ]}>
             {formatCurrency(balance)}
           </ThemedText>
-        </View>
+        </Card>
         
-        <View style={[styles.metricCard, styles.profitCard]}>
-          <ThemedText style={styles.metricLabel}>Profit/Loss</ThemedText>
+        <Card variant="elevated" style={styles.metricCard}>
+          <View style={styles.metricHeader}>
+            <View style={[styles.metricIconContainer, { backgroundColor: Colors.primary[100] }]}>
+              <MaterialIcons name="assessment" size={24} color={Colors.primary[600]} />
+            </View>
+            <ThemedText style={styles.metricLabel}>Profit/Loss</ThemedText>
+          </View>
           <ThemedText style={[
             styles.metricValue,
-            profitLoss >= 0 ? styles.positiveValue : styles.negativeValue
+            profitLoss >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
           ]}>
             {formatCurrency(profitLoss)}
           </ThemedText>
-        </View>
+        </Card>
       </View>
 
       {/* Upcoming Bills */}
       {upcomingBills.length > 0 && (
-        <ThemedView style={styles.section}>
+        <Card variant="elevated" style={styles.section}>
           <View style={styles.sectionHeader}>
-            <ThemedText type="subtitle">Upcoming Bills</ThemedText>
+            <View style={styles.sectionTitleContainer}>
+              <MaterialIcons name="event" size={20} color={Colors.primary[600]} />
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Upcoming Bills
+              </ThemedText>
+            </View>
             <Link href="/bills" asChild>
               <TouchableOpacity>
-                <ThemedText style={styles.seeAllLink}>See all</ThemedText>
+                <ThemedText style={styles.seeAllLink}>View All</ThemedText>
               </TouchableOpacity>
             </Link>
           </View>
-          {upcomingBills.slice(0, 3).map((bill) => (
-            <View key={bill.id} style={styles.billItem}>
-              <View style={styles.billInfo}>
-                <ThemedText style={styles.billName}>{bill.name}</ThemedText>
-                <ThemedText style={styles.billDue}>
-                  Due {bill.dueDate.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
-                </ThemedText>
+          <View style={styles.billsList}>
+            {upcomingBills.slice(0, 3).map((bill, index) => (
+              <View key={bill.id} style={styles.billItem}>
+                <View style={styles.billInfo}>
+                  <ThemedText style={styles.billName}>{bill.name}</ThemedText>
+                  <View style={styles.billMeta}>
+                    <MaterialIcons name="calendar-today" size={14} color={Colors.text.secondary} />
+                    <ThemedText style={styles.billDue}>
+                      Due {bill.dueDate.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
+                    </ThemedText>
+                  </View>
+                </View>
+                <ThemedText style={styles.billAmount}>{formatCurrency(bill.amount)}</ThemedText>
               </View>
-              <ThemedText style={styles.billAmount}>{formatCurrency(bill.amount)}</ThemedText>
-            </View>
-          ))}
-        </ThemedView>
+            ))}
+          </View>
+        </Card>
       )}
 
       {/* Insights */}
       {insights.length > 0 && (
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle">Insights</ThemedText>
-          {insights.map((insight, index) => (
-            <View key={index} style={styles.insightItem}>
-              <ThemedText style={styles.insightText}>• {insight}</ThemedText>
-            </View>
-          ))}
-        </ThemedView>
+        <Card variant="elevated" style={styles.section}>
+          <View style={styles.sectionTitleContainer}>
+            <MaterialIcons name="lightbulb" size={20} color={Colors.warning.main} />
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Insights
+            </ThemedText>
+          </View>
+          <View style={styles.insightsList}>
+            {insights.map((insight, index) => (
+              <View key={index} style={styles.insightItem}>
+                <View style={styles.insightDot} />
+                <ThemedText style={styles.insightText}>{insight}</ThemedText>
+              </View>
+            ))}
+          </View>
+        </Card>
       )}
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
         <Link href="/transactions/add" asChild>
-          <TouchableOpacity style={styles.actionButton}>
-            <ThemedText style={styles.actionButtonText}>+ Add Transaction</ThemedText>
+          <TouchableOpacity style={styles.primaryAction}>
+            <MaterialIcons name="add-circle" size={24} color={Colors.text.inverse} />
+            <ThemedText style={styles.primaryActionText}>Add Transaction</ThemedText>
           </TouchableOpacity>
         </Link>
         
         <Link href="/transactions" asChild>
-          <TouchableOpacity style={[styles.actionButton, styles.actionButtonSecondary]}>
-            <ThemedText style={styles.actionButtonTextSecondary}>View All</ThemedText>
+          <TouchableOpacity style={styles.secondaryAction}>
+            <ThemedText style={styles.secondaryActionText}>View All Transactions</ThemedText>
           </TouchableOpacity>
         </Link>
       </View>
@@ -156,164 +212,198 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray[50],
   },
   header: {
-    padding: 20,
+    paddingHorizontal: Spacing.lg,
     paddingTop: 60,
+    paddingBottom: Spacing.md,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: Typography.fontSize['4xl'],
+    fontWeight: Typography.fontWeight.bold,
+    marginBottom: Spacing.xs,
+    color: Colors.text.primary,
   },
   headerSubtitle: {
-    fontSize: 16,
-    opacity: 0.7,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
   },
   periodFilter: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 20,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   periodButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: Colors.background.light,
+    ...Shadows.sm,
   },
   periodButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: Colors.primary[500],
   },
   periodButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.secondary,
   },
   periodButtonTextActive: {
-    color: '#ffffff',
+    color: Colors.text.inverse,
   },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 20,
-    gap: 12,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
   },
   metricCard: {
     flex: 1,
     minWidth: '45%',
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
+    padding: Spacing.lg,
   },
-  incomeCard: {
-    backgroundColor: '#d1fae5',
+  metricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
-  expenseCard: {
-    backgroundColor: '#fee2e2',
-  },
-  balanceCard: {
-    backgroundColor: '#dbeafe',
-  },
-  profitCard: {
-    backgroundColor: '#e9d5ff',
+  metricIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
   },
   metricLabel: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 4,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+    fontWeight: Typography.fontWeight.medium,
   },
   metricValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  positiveValue: {
-    color: '#10b981',
-  },
-  negativeValue: {
-    color: '#ef4444',
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: Typography.fontWeight.bold,
   },
   section: {
-    margin: 20,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.md,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
   },
   seeAllLink: {
-    color: '#3b82f6',
-    fontSize: 14,
-    fontWeight: '600',
+    color: Colors.primary[600],
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  billsList: {
+    gap: Spacing.md,
   },
   billItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Colors.gray[200],
   },
   billInfo: {
     flex: 1,
   },
   billName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
+  },
+  billMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
   billDue: {
-    fontSize: 14,
-    opacity: 0.6,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
   },
   billAmount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#ef4444',
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.error.main,
+  },
+  insightsList: {
+    gap: Spacing.md,
   },
   insightItem: {
-    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+  },
+  insightDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.warning.main,
+    marginTop: 6,
   },
   insightText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.primary,
+    lineHeight: Typography.fontSize.base * Typography.lineHeight.normal,
+    flex: 1,
   },
   quickActions: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing['2xl'],
+    gap: Spacing.md,
   },
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#3b82f6',
-    paddingVertical: 16,
+  primaryAction: {
+    backgroundColor: Colors.primary[500],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.lg,
+    borderRadius: 12,
+    gap: Spacing.sm,
+    ...Shadows.md,
+  },
+  primaryActionText: {
+    color: Colors.text.inverse,
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  secondaryAction: {
+    backgroundColor: Colors.background.light,
+    paddingVertical: Spacing.md,
     borderRadius: 12,
     alignItems: 'center',
-  },
-  actionButtonSecondary: {
-    backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: '#3b82f6',
+    borderColor: Colors.primary[500],
   },
-  actionButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  actionButtonTextSecondary: {
-    color: '#3b82f6',
-    fontSize: 16,
-    fontWeight: '600',
+  secondaryActionText: {
+    color: Colors.primary[600],
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
   },
 });
-
