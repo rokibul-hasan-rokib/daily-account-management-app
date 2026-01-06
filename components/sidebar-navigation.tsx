@@ -1,26 +1,18 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Link, usePathname } from 'expo-router';
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
-  Text,
 } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-interface SubMenuItem {
-  title: string;
-  href: string;
-  icon?: string;
-}
 
 interface NavItem {
   title: string;
   icon: string;
   href: string;
-  hasSubmenu?: boolean;
-  submenuItems?: SubMenuItem[];
 }
 
 const navItems: NavItem[] = [
@@ -33,11 +25,6 @@ const navItems: NavItem[] = [
     title: 'Transactions',
     icon: 'receipt',
     href: '/transactions',
-    hasSubmenu: true,
-    submenuItems: [
-      { title: 'Add Transaction', href: '/transactions/add', icon: 'add-circle' },
-      { title: 'View All', href: '/transactions', icon: 'list' },
-    ],
   },
   {
     title: 'Profit & Loss',
@@ -53,12 +40,6 @@ const navItems: NavItem[] = [
     title: 'Item Analytics',
     icon: 'bar-chart',
     href: '/item-analytics',
-    hasSubmenu: true,
-    submenuItems: [
-      { title: 'View Analytics', href: '/item-analytics', icon: 'bar-chart' },
-      { title: 'Top Items', href: '/item-analytics?filter=top', icon: 'trending-up' },
-      { title: 'Trends', href: '/item-analytics?filter=trends', icon: 'show-chart' },
-    ],
   },
   {
     title: 'Scan Receipt',
@@ -69,50 +50,36 @@ const navItems: NavItem[] = [
     title: 'Categories',
     icon: 'local-offer',
     href: '/categories',
-    hasSubmenu: true,
-    submenuItems: [
-      { title: 'Add Category', href: '/categories?action=add', icon: 'add-circle' },
-      { title: 'View All', href: '/categories', icon: 'list' },
-    ],
   },
   {
     title: 'Merchants',
     icon: 'store',
     href: '/merchants',
-    hasSubmenu: true,
-    submenuItems: [
-      { title: 'Add Merchant', href: '/merchants?action=add', icon: 'add-circle' },
-      { title: 'View All', href: '/merchants', icon: 'list' },
-    ],
   },
   {
     title: 'Rules',
     icon: 'gavel',
     href: '/rules',
-    hasSubmenu: true,
-    submenuItems: [
-      { title: 'Add Rule', href: '/rules?action=add', icon: 'add-circle' },
-      { title: 'View All', href: '/rules', icon: 'list' },
-    ],
   },
   {
-    title: 'Others',
-    icon: 'more-horiz',
+    title: 'Alerts',
+    icon: 'notifications',
+    href: '/alerts',
+  },
+  {
+    title: 'Summaries',
+    icon: 'description',
+    href: '/summaries',
+  },
+  {
+    title: 'Settings',
+    icon: 'settings',
     href: '/settings',
-    hasSubmenu: true,
-    submenuItems: [
-      { title: 'Alerts', href: '/alerts', icon: 'notifications' },
-      { title: 'Summaries', href: '/summaries', icon: 'description' },
-      { title: 'Settings', href: '/settings', icon: 'settings' },
-      { title: 'Export Data', href: '/settings?tab=export', icon: 'file-download' },
-      { title: 'Backup & Restore', href: '/settings?tab=backup', icon: 'cloud-upload' },
-    ],
   },
 ];
 
 export function SidebarNavigation() {
   const pathname = usePathname();
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const isActive = (href: string) => {
     if (href === '/(tabs)') {
@@ -128,16 +95,6 @@ export function SidebarNavigation() {
       );
     }
     return pathname === href || pathname.startsWith(href);
-  };
-
-  const toggleExpand = (title: string) => {
-    const newExpanded = new Set(expandedItems);
-    if (newExpanded.has(title)) {
-      newExpanded.delete(title);
-    } else {
-      newExpanded.add(title);
-    }
-    setExpandedItems(newExpanded);
   };
 
   return (
@@ -168,68 +125,24 @@ export function SidebarNavigation() {
           const active = isActive(item.href);
           
           return (
-            <View key={item.title}>
-              <Link href={item.href as any} asChild>
-                <TouchableOpacity
-                  style={[styles.navItem, active && styles.navItemActive]}
-                  onPress={() => {
-                    if (item.hasSubmenu) {
-                      toggleExpand(item.title);
-                    }
-                  }}>
-                  <View style={styles.navItemContent}>
-                    <MaterialIcons
-                      name={item.icon as any}
-                      size={24}
-                      color="#FFFFFF"
-                      style={styles.icon}
-                    />
-                    <Text style={[styles.navItemText, active && styles.navItemTextActive]}>
-                      {item.title}
-                    </Text>
-                  </View>
-                  {item.hasSubmenu && (
-                    <MaterialIcons
-                      name="chevron-left"
-                      size={20}
-                      color="#FFFFFF"
-                      style={styles.chevron}
-                    />
-                  )}
-                </TouchableOpacity>
-              </Link>
-              
-              {/* Submenu */}
-              {item.hasSubmenu && expandedItems.has(item.title) && item.submenuItems && (
-                <View style={styles.submenu}>
-                  {item.submenuItems.map((subItem) => {
-                    const subActive = pathname === subItem.href || pathname.startsWith(subItem.href);
-                    return (
-                      <Link key={subItem.href} href={subItem.href as any} asChild>
-                        <TouchableOpacity
-                          style={[styles.submenuItem, subActive && styles.submenuItemActive]}
-                        >
-                          {subItem.icon && (
-                            <MaterialIcons
-                              name={subItem.icon as any}
-                              size={18}
-                              color={subActive ? '#FFFFFF' : '#B8A9D9'}
-                              style={styles.submenuIcon}
-                            />
-                          )}
-                          <Text style={[
-                            styles.submenuText,
-                            subActive && styles.submenuTextActive
-                          ]}>
-                            {subItem.title}
-                          </Text>
-                        </TouchableOpacity>
-                      </Link>
-                    );
-                  })}
+            <Link key={item.title} href={item.href as any} asChild>
+              <TouchableOpacity
+                style={[styles.navItem, active && styles.navItemActive]}
+                activeOpacity={0.7}
+              >
+                <View style={styles.navItemContent}>
+                  <MaterialIcons
+                    name={item.icon as any}
+                    size={24}
+                    color="#FFFFFF"
+                    style={styles.icon}
+                  />
+                  <Text style={[styles.navItemText, active && styles.navItemTextActive]}>
+                    {item.title}
+                  </Text>
                 </View>
-              )}
-            </View>
+              </TouchableOpacity>
+            </Link>
           );
         })}
       </ScrollView>
@@ -337,37 +250,5 @@ const styles = StyleSheet.create({
   },
   navItemTextActive: {
     fontWeight: '600',
-  },
-  chevron: {
-    marginLeft: 8,
-    opacity: 0.7,
-  },
-  submenu: {
-    paddingLeft: 40,
-    paddingVertical: 8,
-    gap: 4,
-  },
-  submenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginVertical: 2,
-    borderRadius: 6,
-  },
-  submenuItemActive: {
-    backgroundColor: '#5A3A93',
-  },
-  submenuIcon: {
-    marginRight: 12,
-  },
-  submenuText: {
-    fontSize: 14,
-    color: '#B8A9D9',
-    fontWeight: '400',
-  },
-  submenuTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '500',
   },
 });

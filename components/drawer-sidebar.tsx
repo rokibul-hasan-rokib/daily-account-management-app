@@ -1,5 +1,5 @@
-import { Link, usePathname, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { usePathname, useRouter } from 'expo-router';
+import React from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -21,7 +21,6 @@ interface NavItem {
   title: string;
   icon: string;
   href: string;
-  hasSubmenu?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -34,7 +33,6 @@ const navItems: NavItem[] = [
     title: 'Transactions',
     icon: 'receipt',
     href: '/transactions',
-    hasSubmenu: true,
   },
   {
     title: 'Profit & Loss',
@@ -50,7 +48,6 @@ const navItems: NavItem[] = [
     title: 'Item Analytics',
     icon: 'bar-chart',
     href: '/item-analytics',
-    hasSubmenu: true,
   },
   {
     title: 'Scan Receipt',
@@ -61,19 +58,16 @@ const navItems: NavItem[] = [
     title: 'Categories',
     icon: 'local-offer',
     href: '/categories',
-    hasSubmenu: true,
   },
   {
     title: 'Merchants',
     icon: 'store',
     href: '/merchants',
-    hasSubmenu: true,
   },
   {
     title: 'Rules',
     icon: 'gavel',
     href: '/rules',
-    hasSubmenu: true,
   },
   {
     title: 'Alerts',
@@ -96,7 +90,6 @@ export function DrawerSidebar() {
   const { isOpen, closeDrawer } = useDrawer();
   const pathname = usePathname();
   const router = useRouter();
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const slideAnim = React.useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
   React.useEffect(() => {
@@ -125,16 +118,6 @@ export function DrawerSidebar() {
   const handleNavigation = (href: string) => {
     router.push(href as any);
     closeDrawer();
-  };
-
-  const toggleExpand = (title: string) => {
-    const newExpanded = new Set(expandedItems);
-    if (newExpanded.has(title)) {
-      newExpanded.delete(title);
-    } else {
-      newExpanded.add(title);
-    }
-    setExpandedItems(newExpanded);
   };
 
   return (
@@ -187,46 +170,24 @@ export function DrawerSidebar() {
               const active = isActive(item.href);
               
               return (
-                <View key={item.title}>
-                  <TouchableOpacity
-                    style={[styles.navItem, active && styles.navItemActive]}
-                    onPress={() => {
-                      if (item.hasSubmenu) {
-                        toggleExpand(item.title);
-                      } else {
-                        handleNavigation(item.href);
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.navItemContent}>
-                      <MaterialIcons
-                        name={item.icon as any}
-                        size={24}
-                        color="#FFFFFF"
-                        style={styles.icon}
-                      />
-                      <Text style={[styles.navItemText, active && styles.navItemTextActive]}>
-                        {item.title}
-                      </Text>
-                    </View>
-                    {item.hasSubmenu && (
-                      <MaterialIcons
-                        name="chevron-left"
-                        size={20}
-                        color="#FFFFFF"
-                        style={styles.chevron}
-                      />
-                    )}
-                  </TouchableOpacity>
-                  
-                  {/* Submenu placeholder */}
-                  {item.hasSubmenu && expandedItems.has(item.title) && (
-                    <View style={styles.submenu}>
-                      {/* Submenu items would go here */}
-                    </View>
-                  )}
-                </View>
+                <TouchableOpacity
+                  key={item.title}
+                  style={[styles.navItem, active && styles.navItemActive]}
+                  onPress={() => handleNavigation(item.href)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.navItemContent}>
+                    <MaterialIcons
+                      name={item.icon as any}
+                      size={24}
+                      color="#FFFFFF"
+                      style={styles.icon}
+                    />
+                    <Text style={[styles.navItemText, active && styles.navItemTextActive]}>
+                      {item.title}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               );
             })}
           </ScrollView>
@@ -363,13 +324,5 @@ const styles = StyleSheet.create({
   },
   navItemTextActive: {
     fontWeight: '600',
-  },
-  chevron: {
-    marginLeft: 8,
-    opacity: 0.7,
-  },
-  submenu: {
-    paddingLeft: 40,
-    paddingVertical: 8,
   },
 });
