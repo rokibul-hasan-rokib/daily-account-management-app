@@ -7,8 +7,8 @@ export default function SplashScreen() {
   const router = useRouter();
 
   const handleFinish = () => {
-    // Navigate to main app after splash screen
-    router.replace('/(tabs)');
+    // Navigate to login after splash screen
+    router.replace('/login');
   };
 
   return (
