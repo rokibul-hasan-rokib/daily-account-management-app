@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { DrawerProvider } from '@/contexts/drawer-context';
+import { AuthProvider } from '@/contexts/auth-context';
 import { DrawerSidebar } from '@/components/drawer-sidebar';
 
 export const unstable_settings = {
@@ -15,18 +16,20 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <DrawerProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="splash" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-          <Stack.Screen name="register" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-        <DrawerSidebar />
-        <StatusBar style="light" />
-      </ThemeProvider>
-    </DrawerProvider>
+    <AuthProvider>
+      <DrawerProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack>
+            <Stack.Screen name="splash" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="register" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack>
+          <DrawerSidebar />
+          <StatusBar style="light" />
+        </ThemeProvider>
+      </DrawerProvider>
+    </AuthProvider>
   );
 }

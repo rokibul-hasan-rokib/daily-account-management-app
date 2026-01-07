@@ -1,38 +1,42 @@
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Colors, Shadows, Spacing, Typography } from '@/constants/design-system';
+import { useAuth } from '@/contexts/auth-context';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
+  Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
-  Alert,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, useRouter } from 'expo-router';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/design-system';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
-    fullName: '',
+    username: '',
     email: '',
-    phone: '',
+    firstName: '',
+    lastName: '',
     password: '',
-    confirmPassword: '',
+    password2: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<{
-    fullName?: string;
+    username?: string;
     email?: string;
-    phone?: string;
+    firstName?: string;
+    lastName?: string;
     password?: string;
-    confirmPassword?: string;
+    password2?: string;
   }>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -46,10 +50,10 @@ export default function RegisterScreen() {
   const validateForm = () => {
     const newErrors: typeof errors = {};
 
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-    } else if (formData.fullName.trim().length < 3) {
-      newErrors.fullName = 'Name must be at least 3 characters';
+    if (!formData.username.trim()) {
+      newErrors.username = 'Username is required';
+    } else if (formData.username.trim().length < 3) {
+      newErrors.username = 'Username must be at least 3 characters';
     }
 
     if (!formData.email.trim()) {
@@ -58,24 +62,24 @@ export default function RegisterScreen() {
       newErrors.email = 'Please enter a valid email';
     }
 
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/.test(formData.phone)) {
-      newErrors.phone = 'Please enter a valid phone number';
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    }
+
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
     }
 
     if (!formData.password.trim()) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-      newErrors.password = 'Password must contain uppercase, lowercase, and number';
     }
 
-    if (!formData.confirmPassword.trim()) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+    if (!formData.password2.trim()) {
+      newErrors.password2 = 'Please confirm your password';
+    } else if (formData.password !== formData.password2) {
+      newErrors.password2 = 'Passwords do not match';
     }
 
     setErrors(newErrors);
@@ -89,8 +93,14 @@ export default function RegisterScreen() {
 
     setIsLoading(true);
     try {
-      // TODO: Implement actual registration API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await register({
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
+        password: formData.password,
+        password2: formData.password2,
+      });
       
       Alert.alert(
         'Registration Successful',
@@ -102,8 +112,9 @@ export default function RegisterScreen() {
           },
         ]
       );
-    } catch (error) {
-      Alert.alert('Registration Failed', 'Something went wrong. Please try again.');
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Something went wrong. Please try again.';
+      Alert.alert('Registration Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -138,13 +149,13 @@ export default function RegisterScreen() {
           {/* Form */}
           <View style={styles.form}>
             <Input
-              label="Full Name"
-              placeholder="Enter your full name"
-              value={formData.fullName}
-              onChangeText={(text) => updateField('fullName', text)}
-              error={errors.fullName}
-              autoCapitalize="words"
-              autoComplete="name"
+              label="Username"
+              placeholder="Choose a username"
+              value={formData.username}
+              onChangeText={(text) => updateField('username', text)}
+              error={errors.username}
+              autoCapitalize="none"
+              autoComplete="username"
               leftIcon={
                 <MaterialIcons name="person" size={20} color={Colors.primary[500]} />
               }
@@ -165,15 +176,28 @@ export default function RegisterScreen() {
             />
 
             <Input
-              label="Phone Number"
-              placeholder="Enter your phone number"
-              value={formData.phone}
-              onChangeText={(text) => updateField('phone', text)}
-              error={errors.phone}
-              keyboardType="phone-pad"
-              autoComplete="tel"
+              label="First Name"
+              placeholder="Enter your first name"
+              value={formData.firstName}
+              onChangeText={(text) => updateField('firstName', text)}
+              error={errors.firstName}
+              autoCapitalize="words"
+              autoComplete="given-name"
               leftIcon={
-                <MaterialIcons name="phone" size={20} color={Colors.primary[500]} />
+                <MaterialIcons name="badge" size={20} color={Colors.primary[500]} />
+              }
+            />
+
+            <Input
+              label="Last Name"
+              placeholder="Enter your last name"
+              value={formData.lastName}
+              onChangeText={(text) => updateField('lastName', text)}
+              error={errors.lastName}
+              autoCapitalize="words"
+              autoComplete="family-name"
+              leftIcon={
+                <MaterialIcons name="badge" size={20} color={Colors.primary[500]} />
               }
             />
 
@@ -206,9 +230,9 @@ export default function RegisterScreen() {
             <Input
               label="Confirm Password"
               placeholder="Confirm your password"
-              value={formData.confirmPassword}
-              onChangeText={(text) => updateField('confirmPassword', text)}
-              error={errors.confirmPassword}
+              value={formData.password2}
+              onChangeText={(text) => updateField('password2', text)}
+              error={errors.password2}
               secureTextEntry={!showConfirmPassword}
               autoCapitalize="none"
               autoComplete="password-new"
@@ -274,11 +298,9 @@ export default function RegisterScreen() {
           {/* Login Link */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
-            <Link href="/login" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Login</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity onPress={() => router.push('./login' as any)}>
+              <Text style={styles.footerLink}>Login</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

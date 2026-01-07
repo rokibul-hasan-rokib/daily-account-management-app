@@ -10,27 +10,27 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/design-system';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const { login } = useAuth();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
+    const newErrors: { username?: string; password?: string } = {};
 
-    if (!email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = 'Please enter a valid email';
+    if (!username.trim()) {
+      newErrors.username = 'Username is required';
     }
 
     if (!password.trim()) {
@@ -50,13 +50,12 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      // TODO: Implement actual login API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
+      await login(username.trim(), password);
       // Navigate to dashboard after successful login
       router.replace('/(tabs)');
-    } catch (error) {
-      Alert.alert('Login Failed', 'Invalid email or password. Please try again.');
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Invalid username or password. Please try again.';
+      Alert.alert('Login Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -91,19 +90,18 @@ export default function LoginScreen() {
           {/* Form */}
           <View style={styles.form}>
             <Input
-              label="Email Address"
-              placeholder="Enter your email"
-              value={email}
+              label="Username"
+              placeholder="Enter your username"
+              value={username}
               onChangeText={(text) => {
-                setEmail(text);
-                if (errors.email) setErrors({ ...errors, email: undefined });
+                setUsername(text);
+                if (errors.username) setErrors({ ...errors, username: undefined });
               }}
-              error={errors.email}
-              keyboardType="email-address"
+              error={errors.username}
               autoCapitalize="none"
-              autoComplete="email"
+              autoComplete="username"
               leftIcon={
-                <MaterialIcons name="email" size={20} color={Colors.primary[500]} />
+                <MaterialIcons name="person" size={20} color={Colors.primary[500]} />
               }
             />
 
@@ -180,11 +178,9 @@ export default function LoginScreen() {
           {/* Sign Up Link */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
-            <Link href="/register" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Sign Up</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity onPress={() => router.push('./register' as any)}>
+              <Text style={styles.footerLink}>Sign Up</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
