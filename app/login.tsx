@@ -62,8 +62,27 @@ export default function LoginScreen() {
       console.error('LoginScreen: Error details:', JSON.stringify(error, null, 2));
       
       // Extract error message
-      let errorMessage = 'Invalid username or password. Please try again.';
-      if (error?.message) {
+      let errorMessage = 'Login failed. Please try again.';
+      
+      // Check if it's a network error
+      if (error?.message?.includes('Network error') || error?.message?.includes('Network') || error?.message?.includes('Cannot connect')) {
+        errorMessage = 'Unable to connect to server. Please check your internet connection and ensure the Django server is running on http://192.168.0.193:5000';
+      } else if (error?.message?.includes('ALLOWED_HOSTS')) {
+        // Django ALLOWED_HOSTS configuration error
+        errorMessage = error.message;
+      } else if (error?.response?.status === 401) {
+        errorMessage = 'Invalid username or password. Please check your credentials.';
+      } else if (error?.response?.status === 400) {
+        // Check if it's an HTML error response (Django debug page)
+        const responseData = error?.response?.data;
+        if (typeof responseData === 'string' && responseData.includes('ALLOWED_HOSTS')) {
+          errorMessage = error?.message || 'Django server configuration error: Please add your IP address to ALLOWED_HOSTS in Django settings.py';
+        } else {
+          errorMessage = error?.message || error?.response?.data?.error || error?.response?.data?.detail || 'Invalid request. Please check your input.';
+        }
+      } else if (error?.response?.status >= 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (error?.message) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
         errorMessage = error;

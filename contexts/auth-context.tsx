@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthService } from '@/services/api';
+import { apiClient } from '@/services/api';
 import { User } from '@/services/api/types';
 
 interface AuthContextType {
@@ -54,11 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await AuthService.login({ username, password });
       console.log('AuthContext: Login response received:', response);
       
+      // Set user from response
       if (response && response.user) {
         setUser(response.user);
-        console.log('AuthContext: User state updated');
+        console.log('AuthContext: User state updated successfully');
       } else {
-        console.warn('AuthContext: Response missing user data:', response);
+        console.warn('AuthContext: Response missing user data, attempting to fetch...');
         // Try to get user from API
         try {
           const user = await AuthService.getCurrentUser();
@@ -66,11 +68,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('AuthContext: User fetched from API');
         } catch (err) {
           console.error('AuthContext: Failed to fetch user:', err);
-          throw new Error('Login successful but failed to get user data');
+          // If we have user in response, use it anyway
+          if (response?.user) {
+            setUser(response.user);
+            console.log('AuthContext: Using user from response');
+          } else {
+            throw new Error('Login successful but failed to get user data');
+          }
         }
       }
     } catch (error: any) {
       console.error('AuthContext: Login error:', error);
+      
+      // Check if it's a storage error (non-critical)
+      const isStorageError = error?.message?.includes('setValueWithKeyAsync') || 
+                            error?.message?.includes('SecureStore') ||
+                            error?.message?.includes('localStorage');
+      
+      if (isStorageError) {
+        console.warn('AuthContext: Storage error detected, but login may have succeeded');
+        // Try to continue if we can get user data
+        try {
+          const user = await AuthService.getCurrentUser();
+          setUser(user);
+          console.log('AuthContext: Login succeeded despite storage error');
+          return; // Success!
+        } catch (fetchError) {
+          console.error('AuthContext: Cannot verify login:', fetchError);
+          throw new Error('Login may have succeeded but cannot verify. Please try again.');
+        }
+      }
+      
+      // Re-throw actual API/login errors
       throw error;
     }
   };

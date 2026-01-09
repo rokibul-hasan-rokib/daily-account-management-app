@@ -22,9 +22,15 @@ export class AuthService {
       data
     );
     
-    // Store token after successful registration
+    // Store token after successful registration - don't fail if storage fails
     if (response.token) {
-      await apiClient.setToken(response.token);
+      try {
+        await apiClient.setToken(response.token);
+        console.log('AuthService: Registration token stored successfully');
+      } catch (storageError: any) {
+        console.warn('AuthService: Token storage failed (non-critical):', storageError);
+        // Continue - token is in response
+      }
     }
     
     return response;
@@ -63,9 +69,14 @@ export class AuthService {
         throw new Error('Login response missing authentication token');
       }
       
-      // Store token first
-      await apiClient.setToken(token);
-      console.log('AuthService: Token stored successfully');
+      // Store token first - don't fail login if storage fails
+      try {
+        await apiClient.setToken(token);
+        console.log('AuthService: Token stored successfully');
+      } catch (storageError: any) {
+        console.warn('AuthService: Token storage failed (non-critical):', storageError);
+        // Continue with login - token is in response, can be stored manually if needed
+      }
       
       // Extract user data
       let user: User | undefined;

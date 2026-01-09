@@ -5,9 +5,12 @@
 
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { API_CONFIG } from './config';
 
 const TOKEN_KEY = 'auth_token';
+// Check if we're on web platform
+const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && typeof localStorage !== 'undefined');
 
 class ApiClient {
   private client: AxiosInstance;
@@ -56,11 +59,37 @@ class ApiClient {
     if (error.response) {
       // Server responded with error status
       const data = error.response.data as any;
-      const message = data?.error || data?.detail || data?.message || error.message;
-      return new Error(message || 'An error occurred');
+      let message = data?.error || data?.detail || data?.message || error.message;
+      
+      // Check if response is HTML (Django debug error page)
+      if (typeof data === 'string' && data.includes('<!DOCTYPE html>')) {
+        // Try to extract error message from HTML
+        const htmlString = data as string;
+        
+        // Check for DisallowedHost error
+        if (htmlString.includes('DisallowedHost') || htmlString.includes('ALLOWED_HOSTS')) {
+          const hostMatch = htmlString.match(/add ['"]([^'"]+)['"] to ALLOWED_HOSTS/i);
+          const host = hostMatch ? hostMatch[1] : '192.168.0.193';
+          message = `Django server configuration error: The IP address '${host}' needs to be added to ALLOWED_HOSTS in your Django settings.py file. Please add '${host}' to the ALLOWED_HOSTS list and restart your Django server.`;
+        } else {
+          // Try to extract exception value from HTML
+          const exceptionMatch = htmlString.match(/<pre class="exception_value">([^<]+)<\/pre>/i);
+          if (exceptionMatch) {
+            message = `Server error: ${exceptionMatch[1].trim()}`;
+          } else {
+            message = 'Server returned an error. Check your Django server configuration.';
+          }
+        }
+      }
+      
+      const errorObj = new Error(message || 'An error occurred');
+      // Preserve response data for better error handling
+      (errorObj as any).response = error.response;
+      return errorObj;
     } else if (error.request) {
-      // Request made but no response received
-      return new Error('Network error. Please check your connection.');
+      // Request made but no response received - check if server is reachable
+      const message = `Cannot connect to server at ${API_CONFIG.BASE_URL}. Make sure your Django server is running and accessible.`;
+      return new Error(message);
     } else {
       // Something else happened
       return new Error(error.message || 'An unexpected error occurred');
@@ -69,22 +98,53 @@ class ApiClient {
 
   // Token management
   async setToken(token: string): Promise<void> {
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
+    try {
+      if (isWeb && typeof localStorage !== 'undefined') {
+        // Use localStorage for web
+        localStorage.setItem(TOKEN_KEY, token);
+        console.log('ApiClient: Token stored in localStorage');
+      } else if (!isWeb) {
+        // Use SecureStore for native platforms
+        await SecureStore.setItemAsync(TOKEN_KEY, token);
+        console.log('ApiClient: Token stored in SecureStore');
+      } else {
+        console.warn('ApiClient: No storage available - token not persisted');
+      }
+    } catch (error: any) {
+      console.error('ApiClient: Error storing token (non-critical):', error);
+      // Don't throw - allow login to proceed even if storage fails
+      // Token will still be available in the response and can be used for API calls
+      // Just log the error but don't fail the login process
+    }
   }
 
   async getToken(): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(TOKEN_KEY);
+      if (isWeb && typeof localStorage !== 'undefined') {
+        // Use localStorage for web
+        return localStorage.getItem(TOKEN_KEY);
+      } else {
+        // Use SecureStore for native platforms
+        return await SecureStore.getItemAsync(TOKEN_KEY);
+      }
     } catch (error) {
+      console.warn('Error getting token:', error);
       return null;
     }
   }
 
   async clearToken(): Promise<void> {
     try {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
+      if (isWeb && typeof localStorage !== 'undefined') {
+        // Use localStorage for web
+        localStorage.removeItem(TOKEN_KEY);
+      } else {
+        // Use SecureStore for native platforms
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+      }
     } catch (error) {
       // Ignore errors
+      console.warn('Error clearing token:', error);
     }
   }
 
