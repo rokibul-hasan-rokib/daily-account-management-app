@@ -31,7 +31,7 @@ export const API_ENDPOINTS = {
     LIST: '/merchants/',
     DETAIL: (id: number) => `/merchants/${id}/`,
   },
-  // Transactions
+  // Transactions vinchi 
   TRANSACTIONS: {
     LIST: '/transactions/',
     DETAIL: (id: number) => `/transactions/${id}/`,

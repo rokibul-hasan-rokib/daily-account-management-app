@@ -95,8 +95,19 @@ class ApiClient {
   }
 
   async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    const response = await this.client.post<T>(url, data, config);
-    return response.data;
+    try {
+      console.log('ApiClient: POST request to:', url);
+      console.log('ApiClient: Request data:', data);
+      const response = await this.client.post<T>(url, data, config);
+      console.log('ApiClient: Response status:', response.status);
+      console.log('ApiClient: Response data:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('ApiClient: POST error:', error);
+      console.error('ApiClient: Error response:', error.response?.data);
+      console.error('ApiClient: Error status:', error.response?.status);
+      throw error;
+    }
   }
 
   async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {

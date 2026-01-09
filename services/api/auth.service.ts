@@ -34,17 +34,74 @@ export class AuthService {
    * Login user
    */
   static async login(data: LoginRequest): Promise<AuthResponse> {
-    const response = await apiClient.post<AuthResponse>(
-      API_ENDPOINTS.AUTH.LOGIN,
-      data
-    );
-    
-    // Store token after successful login
-    if (response.token) {
-      await apiClient.setToken(response.token);
+    try {
+      console.log('AuthService: Sending login request to:', API_ENDPOINTS.AUTH.LOGIN);
+      console.log('AuthService: Login data:', { username: data.username, password: '***' });
+      
+      const response = await apiClient.post<any>(
+        API_ENDPOINTS.AUTH.LOGIN,
+        data
+      );
+      
+      console.log('AuthService: Login response received:', JSON.stringify(response, null, 2));
+      
+      // Handle different response formats
+      let authResponse: AuthResponse;
+      let token: string | undefined;
+      
+      // Extract token from various possible locations
+      if (response.token) {
+        token = response.token;
+      } else if (response.data?.token) {
+        token = response.data.token;
+      } else if (response.auth_token) {
+        token = response.auth_token;
+      }
+      
+      if (!token) {
+        console.warn('AuthService: No token found in response:', response);
+        throw new Error('Login response missing authentication token');
+      }
+      
+      // Store token first
+      await apiClient.setToken(token);
+      console.log('AuthService: Token stored successfully');
+      
+      // Extract user data
+      let user: User | undefined;
+      if (response.user) {
+        user = response.user;
+      } else if (response.data?.user) {
+        user = response.data.user;
+      }
+      
+      // If no user in response, fetch it
+      if (!user) {
+        console.log('AuthService: Fetching user data...');
+        try {
+          user = await this.getCurrentUser();
+        } catch (err) {
+          console.warn('AuthService: Could not fetch user, using minimal user object');
+          // Create minimal user object from username
+          user = {
+            id: 0,
+            username: data.username,
+            email: '',
+          };
+        }
+      }
+      
+      authResponse = {
+        token,
+        user
+      };
+      
+      return authResponse;
+    } catch (error: any) {
+      console.error('AuthService: Login error:', error);
+      console.error('AuthService: Error response:', error.response?.data);
+      throw error;
     }
-    
-    return response;
   }
 
   /**

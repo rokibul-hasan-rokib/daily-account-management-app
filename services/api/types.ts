@@ -34,8 +34,6 @@ export interface AuthResponse {
 export interface RegisterRequest {
   username: string;
   email: string;
-  first_name: string;
-  last_name: string;
   password: string;
   password2: string;
 }
@@ -52,6 +50,8 @@ export interface Category {
   type: 'income' | 'expense';
   icon?: string;
   color?: string;
+  description?: string;
+  is_default?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -76,6 +76,7 @@ export interface Merchant {
   id: number;
   name: string;
   default_category?: number;
+  default_category_name?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -118,6 +119,7 @@ export interface TransactionRequest {
   description?: string;
   notes?: string;
   is_recurring?: boolean;
+  recurring_frequency?: string;
 }
 
 export interface TransactionListParams {
@@ -126,7 +128,7 @@ export interface TransactionListParams {
   start_date?: string;
   end_date?: string;
   search?: string;
-  ordering?: 'date' | 'amount' | 'created_at';
+  ordering?: 'date' | '-date' | 'amount' | '-amount' | 'created_at' | '-created_at';
   page?: number;
   page_size?: number;
 }
@@ -139,7 +141,9 @@ export interface ReceiptItem {
   unit_price: string;
   total_price: string;
   category?: number;
+  category_name?: string;
   product_code?: string;
+  receipt?: number;
   created_at?: string;
 }
 
@@ -159,18 +163,20 @@ export interface Receipt {
   total_amount: string;
   tax_amount?: string;
   image?: string;
+  is_extracted?: boolean;
+  extraction_confidence?: number;
   items: ReceiptItem[];
   created_at?: string;
   updated_at?: string;
 }
 
 export interface ReceiptRequest {
-  vendor_name: string;
-  receipt_date: string;
-  total_amount: string;
+  vendor_name?: string;
+  receipt_date?: string;
+  total_amount?: string;
   tax_amount?: string;
   image?: File | string;
-  items: ReceiptItemRequest[];
+  items?: ReceiptItemRequest[];
 }
 
 export interface ReceiptListParams {
@@ -196,9 +202,9 @@ export interface ItemAnalyticsResponse {
     count: number;
   }>;
   category_breakdown: Array<{
-    category: string;
-    total_spent: string;
-    item_count: number;
+    category__name: string;
+    total: number;
+    count: number;
   }>;
   recent_items: Array<{
     item_name: string;
@@ -222,6 +228,7 @@ export interface Liability {
   due_date: string;
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   category?: number;
+  category_name?: string;
   description?: string;
   created_at?: string;
   updated_at?: string;
@@ -288,6 +295,7 @@ export interface BudgetRequest {
 export interface Alert {
   id: number;
   type: string;
+  title: string;
   message: string;
   is_read: boolean;
   created_at: string;
@@ -303,13 +311,14 @@ export interface AlertListParams {
 
 // Profile types
 export interface UserProfile {
-  id: number;
-  user: number;
+  id?: number;
+  user?: number;
   currency: string;
   default_view?: string;
   show_balance?: boolean;
   show_profit_loss?: boolean;
   email_alerts?: boolean;
+  push_alerts?: boolean;
   alert_days_before?: number;
 }
 
@@ -319,6 +328,7 @@ export interface UserProfileRequest {
   show_balance?: boolean;
   show_profit_loss?: boolean;
   email_alerts?: boolean;
+  push_alerts?: boolean;
   alert_days_before?: number;
 }
 
@@ -331,11 +341,11 @@ export interface DashboardSummary {
   total_bills_due: string;
   start_date: string;
   end_date: string;
-  range_type: 'today' | 'week' | 'month' | 'custom';
+  range_type: 'today' | 'yesterday' | 'week' | 'month' | 'custom';
 }
 
 export interface DashboardParams {
-  range?: 'today' | 'week' | 'month' | 'custom';
+  range?: 'today' | 'yesterday' | 'week' | 'month' | 'custom';
   start_date?: string;
   end_date?: string;
 }

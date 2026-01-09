@@ -35,20 +35,38 @@ export class ReceiptsService {
   /**
    * Create a new receipt
    */
-  static async createReceipt(data: ReceiptRequest): Promise<Receipt> {
+  static async createReceipt(data: ReceiptRequest | FormData): Promise<Receipt> {
+    // If FormData is passed directly (for image upload)
+    if (data instanceof FormData) {
+      return await apiClient.postFormData<Receipt>(
+        API_ENDPOINTS.RECEIPTS.LIST,
+        data
+      );
+    }
+    
     // If image is a File, use FormData
     if (data.image && typeof data.image !== 'string') {
       const formData = new FormData();
-      formData.append('vendor_name', data.vendor_name);
-      formData.append('receipt_date', data.receipt_date);
-      formData.append('total_amount', data.total_amount);
+      formData.append('image', data.image as any);
+      
+      // Optional fields
+      if (data.vendor_name) {
+        formData.append('vendor_name', data.vendor_name);
+      }
+      if (data.receipt_date) {
+        formData.append('receipt_date', data.receipt_date);
+      }
+      if (data.total_amount) {
+        formData.append('total_amount', data.total_amount);
+      }
       if (data.tax_amount) {
         formData.append('tax_amount', data.tax_amount);
       }
-      formData.append('image', data.image as any);
       
-      // Append items as JSON string
-      formData.append('items', JSON.stringify(data.items));
+      // Append items if provided
+      if (data.items && data.items.length > 0) {
+        formData.append('items', JSON.stringify(data.items));
+      }
       
       return await apiClient.postFormData<Receipt>(
         API_ENDPOINTS.RECEIPTS.LIST,
@@ -56,6 +74,7 @@ export class ReceiptsService {
       );
     }
     
+    // Regular JSON request (without image)
     return await apiClient.post<Receipt>(
       API_ENDPOINTS.RECEIPTS.LIST,
       data

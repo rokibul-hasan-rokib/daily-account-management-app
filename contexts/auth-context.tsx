@@ -15,8 +15,6 @@ interface AuthContextType {
   register: (data: {
     username: string;
     email: string;
-    first_name: string;
-    last_name: string;
     password: string;
     password2: string;
   }) => Promise<void>;
@@ -52,9 +50,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     try {
+      console.log('AuthContext: Calling AuthService.login...');
       const response = await AuthService.login({ username, password });
-      setUser(response.user);
-    } catch (error) {
+      console.log('AuthContext: Login response received:', response);
+      
+      if (response && response.user) {
+        setUser(response.user);
+        console.log('AuthContext: User state updated');
+      } else {
+        console.warn('AuthContext: Response missing user data:', response);
+        // Try to get user from API
+        try {
+          const user = await AuthService.getCurrentUser();
+          setUser(user);
+          console.log('AuthContext: User fetched from API');
+        } catch (err) {
+          console.error('AuthContext: Failed to fetch user:', err);
+          throw new Error('Login successful but failed to get user data');
+        }
+      }
+    } catch (error: any) {
+      console.error('AuthContext: Login error:', error);
       throw error;
     }
   };
@@ -62,15 +78,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (data: {
     username: string;
     email: string;
-    first_name: string;
-    last_name: string;
     password: string;
     password2: string;
   }) => {
     try {
+      console.log('AuthContext: Calling AuthService.register...');
       const response = await AuthService.register(data);
-      setUser(response.user);
-    } catch (error) {
+      console.log('AuthContext: Register response received:', response);
+      
+      if (response && response.user) {
+        setUser(response.user);
+        console.log('AuthContext: User state updated');
+      } else {
+        console.warn('AuthContext: Response missing user data:', response);
+        // Try to get user from API
+        try {
+          const user = await AuthService.getCurrentUser();
+          setUser(user);
+          console.log('AuthContext: User fetched from API');
+        } catch (err) {
+          console.error('AuthContext: Failed to fetch user:', err);
+          throw new Error('Registration successful but failed to get user data');
+        }
+      }
+    } catch (error: any) {
+      console.error('AuthContext: Register error:', error);
       throw error;
     }
   };

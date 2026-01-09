@@ -35,8 +35,6 @@ export default function LoginScreen() {
 
     if (!password.trim()) {
       newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
     }
 
     setErrors(newErrors);
@@ -50,11 +48,30 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
+      console.log('LoginScreen: Attempting login with username:', username.trim());
       await login(username.trim(), password);
-      // Navigate to dashboard after successful login
+      console.log('LoginScreen: Login successful');
+      
+      // Wait a moment for state to update, then navigate
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      console.log('LoginScreen: Navigating to dashboard...');
       router.replace('/(tabs)');
     } catch (error: any) {
-      const errorMessage = error?.message || 'Invalid username or password. Please try again.';
+      console.error('LoginScreen: Login error:', error);
+      console.error('LoginScreen: Error details:', JSON.stringify(error, null, 2));
+      
+      // Extract error message
+      let errorMessage = 'Invalid username or password. Please try again.';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error?.response?.data) {
+        const data = error.response.data;
+        errorMessage = data.error || data.detail || data.message || errorMessage;
+      }
+      
       Alert.alert('Login Failed', errorMessage);
     } finally {
       setIsLoading(false);

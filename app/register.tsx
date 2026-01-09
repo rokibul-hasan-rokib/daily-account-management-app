@@ -23,8 +23,6 @@ export default function RegisterScreen() {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    firstName: '',
-    lastName: '',
     password: '',
     password2: '',
   });
@@ -33,8 +31,6 @@ export default function RegisterScreen() {
   const [errors, setErrors] = useState<{
     username?: string;
     email?: string;
-    firstName?: string;
-    lastName?: string;
     password?: string;
     password2?: string;
   }>({});
@@ -60,14 +56,6 @@ export default function RegisterScreen() {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email';
-    }
-
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
     }
 
     if (!formData.password.trim()) {
@@ -96,8 +84,6 @@ export default function RegisterScreen() {
       await register({
         username: formData.username.trim(),
         email: formData.email.trim(),
-        first_name: formData.firstName.trim(),
-        last_name: formData.lastName.trim(),
         password: formData.password,
         password2: formData.password2,
       });
@@ -172,32 +158,6 @@ export default function RegisterScreen() {
               autoComplete="email"
               leftIcon={
                 <MaterialIcons name="email" size={20} color={Colors.primary[500]} />
-              }
-            />
-
-            <Input
-              label="First Name"
-              placeholder="Enter your first name"
-              value={formData.firstName}
-              onChangeText={(text) => updateField('firstName', text)}
-              error={errors.firstName}
-              autoCapitalize="words"
-              autoComplete="given-name"
-              leftIcon={
-                <MaterialIcons name="badge" size={20} color={Colors.primary[500]} />
-              }
-            />
-
-            <Input
-              label="Last Name"
-              placeholder="Enter your last name"
-              value={formData.lastName}
-              onChangeText={(text) => updateField('lastName', text)}
-              error={errors.lastName}
-              autoCapitalize="words"
-              autoComplete="family-name"
-              leftIcon={
-                <MaterialIcons name="badge" size={20} color={Colors.primary[500]} />
               }
             />
 
