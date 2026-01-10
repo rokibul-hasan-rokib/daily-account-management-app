@@ -20,8 +20,7 @@ export class LiabilitiesService {
     params?: LiabilityListParams
   ): Promise<Liability[] | PaginatedResponse<Liability>> {
     return await apiClient.get<Liability[] | PaginatedResponse<Liability>>(
-      API_ENDPOINTS.LIABILITIES.LIST,
-      { params }
+      API_ENDPOINTS.LIABILITIES.LIST(params)
     );
   }
 
@@ -39,7 +38,7 @@ export class LiabilitiesService {
    */
   static async createLiability(data: LiabilityRequest): Promise<Liability> {
     return await apiClient.post<Liability>(
-      API_ENDPOINTS.LIABILITIES.LIST,
+      API_ENDPOINTS.LIABILITIES.CREATE,
       data
     );
   }

@@ -61,6 +61,7 @@ export interface CategoryRequest {
   type: 'income' | 'expense';
   icon?: string;
   color?: string;
+  description?: string;
 }
 
 export interface CategoryListParams {
@@ -175,8 +176,13 @@ export interface ReceiptRequest {
   receipt_date?: string;
   total_amount?: string;
   tax_amount?: string;
-  image?: File | string;
+  image?: File | string | FormData;
   items?: ReceiptItemRequest[];
+}
+
+export interface ReceiptExtractResponse {
+  message: string;
+  receipt_id: number;
 }
 
 export interface ReceiptListParams {
@@ -384,4 +390,20 @@ export interface SummariesResponse {
   }>;
   insights: string[];
   upcoming_bills: Liability[];
+}
+
+// Form Data types for React Native file uploads
+export interface ReceiptImageUpload {
+  uri: string;
+  type: string;
+  name: string;
+}
+
+// Update types for React Native FormData compatibility
+export type ReceiptFormData = FormData | {
+  image: ReceiptImageUpload;
+  vendor_name?: string;
+  receipt_date?: string;
+  total_amount?: string;
+  tax_amount?: string;
 }

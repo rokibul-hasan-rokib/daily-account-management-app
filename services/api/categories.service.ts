@@ -20,8 +20,7 @@ export class CategoriesService {
     params?: CategoryListParams
   ): Promise<Category[] | PaginatedResponse<Category>> {
     return await apiClient.get<Category[] | PaginatedResponse<Category>>(
-      API_ENDPOINTS.CATEGORIES.LIST,
-      { params }
+      API_ENDPOINTS.CATEGORIES.LIST(params)
     );
   }
 
@@ -37,7 +36,7 @@ export class CategoriesService {
    */
   static async createCategory(data: CategoryRequest): Promise<Category> {
     return await apiClient.post<Category>(
-      API_ENDPOINTS.CATEGORIES.LIST,
+      API_ENDPOINTS.CATEGORIES.CREATE,
       data
     );
   }

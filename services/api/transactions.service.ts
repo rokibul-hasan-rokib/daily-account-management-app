@@ -20,8 +20,7 @@ export class TransactionsService {
     params?: TransactionListParams
   ): Promise<Transaction[] | PaginatedResponse<Transaction>> {
     return await apiClient.get<Transaction[] | PaginatedResponse<Transaction>>(
-      API_ENDPOINTS.TRANSACTIONS.LIST,
-      { params }
+      API_ENDPOINTS.TRANSACTIONS.LIST(params)
     );
   }
 
@@ -39,7 +38,7 @@ export class TransactionsService {
    */
   static async createTransaction(data: TransactionRequest): Promise<Transaction> {
     return await apiClient.post<Transaction>(
-      API_ENDPOINTS.TRANSACTIONS.LIST,
+      API_ENDPOINTS.TRANSACTIONS.CREATE,
       data
     );
   }

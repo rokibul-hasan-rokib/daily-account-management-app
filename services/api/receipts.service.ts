@@ -20,8 +20,7 @@ export class ReceiptsService {
     params?: ReceiptListParams
   ): Promise<Receipt[] | PaginatedResponse<Receipt>> {
     return await apiClient.get<Receipt[] | PaginatedResponse<Receipt>>(
-      API_ENDPOINTS.RECEIPTS.LIST,
-      { params }
+      API_ENDPOINTS.RECEIPTS.LIST(params)
     );
   }
 
@@ -39,7 +38,7 @@ export class ReceiptsService {
     // If FormData is passed directly (for image upload)
     if (data instanceof FormData) {
       return await apiClient.postFormData<Receipt>(
-        API_ENDPOINTS.RECEIPTS.LIST,
+        API_ENDPOINTS.RECEIPTS.CREATE,
         data
       );
     }
@@ -69,14 +68,14 @@ export class ReceiptsService {
       }
       
       return await apiClient.postFormData<Receipt>(
-        API_ENDPOINTS.RECEIPTS.LIST,
+        API_ENDPOINTS.RECEIPTS.CREATE,
         formData
       );
     }
     
     // Regular JSON request (without image)
     return await apiClient.post<Receipt>(
-      API_ENDPOINTS.RECEIPTS.LIST,
+      API_ENDPOINTS.RECEIPTS.CREATE,
       data
     );
   }

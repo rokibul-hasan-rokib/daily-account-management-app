@@ -23,7 +23,7 @@ export class ProfileService {
    */
   static async updateProfile(data: UserProfileRequest): Promise<UserProfile> {
     return await apiClient.patch<UserProfile>(
-      API_ENDPOINTS.PROFILE.ME,
+      API_ENDPOINTS.PROFILE.UPDATE,
       data
     );
   }

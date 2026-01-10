@@ -19,8 +19,7 @@ export class AlertsService {
     params?: AlertListParams
   ): Promise<Alert[] | PaginatedResponse<Alert>> {
     return await apiClient.get<Alert[] | PaginatedResponse<Alert>>(
-      API_ENDPOINTS.ALERTS.LIST,
-      { params }
+      API_ENDPOINTS.ALERTS.LIST(params)
     );
   }
 

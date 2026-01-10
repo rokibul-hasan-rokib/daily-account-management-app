@@ -21,8 +21,7 @@ export class ReceiptItemsService {
     params?: ReceiptItemListParams
   ): Promise<ReceiptItem[] | PaginatedResponse<ReceiptItem>> {
     return await apiClient.get<ReceiptItem[] | PaginatedResponse<ReceiptItem>>(
-      API_ENDPOINTS.RECEIPT_ITEMS.LIST,
-      { params }
+      API_ENDPOINTS.RECEIPT_ITEMS.LIST(params)
     );
   }
 
@@ -33,8 +32,7 @@ export class ReceiptItemsService {
     params?: ItemAnalyticsParams
   ): Promise<ItemAnalyticsResponse> {
     return await apiClient.get<ItemAnalyticsResponse>(
-      API_ENDPOINTS.RECEIPT_ITEMS.ANALYTICS,
-      { params }
+      API_ENDPOINTS.RECEIPT_ITEMS.ANALYTICS(params)
     );
   }
 }

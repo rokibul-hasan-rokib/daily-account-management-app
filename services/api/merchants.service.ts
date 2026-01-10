@@ -20,8 +20,7 @@ export class MerchantsService {
     params?: MerchantListParams
   ): Promise<Merchant[] | PaginatedResponse<Merchant>> {
     return await apiClient.get<Merchant[] | PaginatedResponse<Merchant>>(
-      API_ENDPOINTS.MERCHANTS.LIST,
-      { params }
+      API_ENDPOINTS.MERCHANTS.LIST(params)
     );
   }
 
@@ -37,7 +36,7 @@ export class MerchantsService {
    */
   static async createMerchant(data: MerchantRequest): Promise<Merchant> {
     return await apiClient.post<Merchant>(
-      API_ENDPOINTS.MERCHANTS.LIST,
+      API_ENDPOINTS.MERCHANTS.CREATE,
       data
     );
   }
