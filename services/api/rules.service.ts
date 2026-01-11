@@ -8,14 +8,20 @@ import { API_ENDPOINTS } from './config';
 import {
   CategoryRule,
   CategoryRuleRequest,
+  CategoryRuleListParams,
+  PaginatedResponse,
 } from './types';
 
 export class RulesService {
   /**
    * Get list of rules
    */
-  static async getRules(): Promise<CategoryRule[]> {
-    return await apiClient.get<CategoryRule[]>(API_ENDPOINTS.RULES.LIST);
+  static async getRules(
+    params?: CategoryRuleListParams
+  ): Promise<CategoryRule[] | PaginatedResponse<CategoryRule>> {
+    return await apiClient.get<CategoryRule[] | PaginatedResponse<CategoryRule>>(
+      API_ENDPOINTS.RULES.LIST(params)
+    );
   }
 
   /**
@@ -30,7 +36,7 @@ export class RulesService {
    */
   static async createRule(data: CategoryRuleRequest): Promise<CategoryRule> {
     return await apiClient.post<CategoryRule>(
-      API_ENDPOINTS.RULES.LIST,
+      API_ENDPOINTS.RULES.CREATE,
       data
     );
   }

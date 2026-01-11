@@ -9,6 +9,8 @@ import {
   Receipt,
   ReceiptRequest,
   ReceiptListParams,
+  ReceiptUploadResponse,
+  ReceiptExtractResponse,
   PaginatedResponse,
 } from './types';
 
@@ -32,10 +34,55 @@ export class ReceiptsService {
   }
 
   /**
-   * Create a new receipt
+   * Upload receipt with image (auto OCR)
+   */
+  static async uploadReceipt(data: ReceiptRequest | FormData): Promise<ReceiptUploadResponse> {
+    // If FormData is passed directly (for image upload)
+    if (data instanceof FormData) {
+      return await apiClient.postFormData<ReceiptUploadResponse>(
+        API_ENDPOINTS.RECEIPTS.UPLOAD,
+        data
+      );
+    }
+    
+    // If image is a File, use FormData
+    if (data.image && typeof data.image !== 'string') {
+      const formData = new FormData();
+      formData.append('image', data.image as any);
+      
+      // Optional fields
+      if (data.vendor_name) {
+        formData.append('vendor_name', data.vendor_name);
+      }
+      if (data.receipt_date) {
+        formData.append('receipt_date', data.receipt_date);
+      }
+      if (data.total_amount) {
+        formData.append('total_amount', data.total_amount);
+      }
+      if (data.tax_amount) {
+        formData.append('tax_amount', data.tax_amount);
+      }
+      
+      // Append items if provided
+      if (data.items && data.items.length > 0) {
+        formData.append('items', JSON.stringify(data.items));
+      }
+      
+      return await apiClient.postFormData<ReceiptUploadResponse>(
+        API_ENDPOINTS.RECEIPTS.UPLOAD,
+        formData
+      );
+    }
+    
+    throw new Error('Image is required for receipt upload');
+  }
+
+  /**
+   * Create a new receipt (without auto OCR)
    */
   static async createReceipt(data: ReceiptRequest | FormData): Promise<Receipt> {
-    // If FormData is passed directly (for image upload)
+    // If FormData is passed directly
     if (data instanceof FormData) {
       return await apiClient.postFormData<Receipt>(
         API_ENDPOINTS.RECEIPTS.CREATE,
@@ -103,8 +150,8 @@ export class ReceiptsService {
   /**
    * Extract receipt data using OCR
    */
-  static async extractReceipt(id: number): Promise<Receipt> {
-    return await apiClient.post<Receipt>(
+  static async extractReceipt(id: number): Promise<ReceiptExtractResponse> {
+    return await apiClient.post<ReceiptExtractResponse>(
       API_ENDPOINTS.RECEIPTS.EXTRACT(id)
     );
   }

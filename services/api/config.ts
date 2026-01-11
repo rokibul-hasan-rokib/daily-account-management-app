@@ -18,6 +18,7 @@ export const buildQueryString = (params: Record<string, any>): string => {
       queryParams.append(key, String(value));
     }
   });
+  
   const queryString = queryParams.toString();
   return queryString ? `?${queryString}` : '';
 };
@@ -37,8 +38,10 @@ export const API_ENDPOINTS = {
   },
   // Categories
   CATEGORIES: {
-    LIST: (params?: { type?: 'income' | 'expense'; search?: string; ordering?: string }) => 
-      `/categories/${buildQueryString(params || {})}`,
+    LIST: (params?: { type?: 'income' | 'expense'; search?: string; ordering?: string }) => {
+      const query = buildQueryString(params || {});
+      return `/categories${query}`;
+    },
     CREATE: '/categories/',
     DETAIL: (id: number) => `/categories/${id}/`,
     UPDATE: (id: number) => `/categories/${id}/`,
@@ -46,8 +49,10 @@ export const API_ENDPOINTS = {
   },
   // Merchants
   MERCHANTS: {
-    LIST: (params?: { search?: string; ordering?: string }) => 
-      `/merchants/${buildQueryString(params || {})}`,
+    LIST: (params?: { search?: string; ordering?: string }) => {
+      const query = buildQueryString(params || {});
+      return `/merchants${query}`;
+    },
     CREATE: '/merchants/',
     DETAIL: (id: number) => `/merchants/${id}/`,
     UPDATE: (id: number) => `/merchants/${id}/`,
@@ -63,7 +68,10 @@ export const API_ENDPOINTS = {
       search?: string;
       ordering?: string;
       page?: number;
-    }) => `/transactions/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/transactions${query}`;
+    },
     CREATE: '/transactions/',
     DETAIL: (id: number) => `/transactions/${id}/`,
     UPDATE: (id: number) => `/transactions/${id}/`,
@@ -71,9 +79,12 @@ export const API_ENDPOINTS = {
   },
   // Receipts
   RECEIPTS: {
-    LIST: (params?: { search?: string; ordering?: string }) => 
-      `/receipts/${buildQueryString(params || {})}`,
+    LIST: (params?: { search?: string; ordering?: string }) => {
+      const query = buildQueryString(params || {});
+      return `/receipts${query}`;
+    },
     CREATE: '/receipts/',
+    UPLOAD: '/receipts/upload/',
     DETAIL: (id: number) => `/receipts/${id}/`,
     UPDATE: (id: number) => `/receipts/${id}/`,
     DELETE: (id: number) => `/receipts/${id}/`,
@@ -86,12 +97,22 @@ export const API_ENDPOINTS = {
       start_date?: string;
       end_date?: string;
       ordering?: string;
-    }) => `/receipt-items/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/receipt-items${query}`;
+    },
+    CREATE: '/receipt-items/',
+    DETAIL: (id: number) => `/receipt-items/${id}/`,
+    UPDATE: (id: number) => `/receipt-items/${id}/`,
+    DELETE: (id: number) => `/receipt-items/${id}/`,
     ANALYTICS: (params?: {
       search?: string;
       start_date?: string;
       end_date?: string;
-    }) => `/receipt-items/analytics/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/receipt-items/analytics${query}`;
+    },
   },
   // Liabilities (Bills)
   LIABILITIES: {
@@ -99,7 +120,10 @@ export const API_ENDPOINTS = {
       status?: 'pending' | 'paid' | 'overdue' | 'cancelled';
       search?: string;
       ordering?: string;
-    }) => `/liabilities/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/liabilities${query}`;
+    },
     CREATE: '/liabilities/',
     DETAIL: (id: number) => `/liabilities/${id}/`,
     UPDATE: (id: number) => `/liabilities/${id}/`,
@@ -108,7 +132,10 @@ export const API_ENDPOINTS = {
   },
   // Rules
   RULES: {
-    LIST: '/rules/',
+    LIST: (params?: { ordering?: string }) => {
+      const query = buildQueryString(params || {});
+      return `/rules${query}`;
+    },
     CREATE: '/rules/',
     DETAIL: (id: number) => `/rules/${id}/`,
     UPDATE: (id: number) => `/rules/${id}/`,
@@ -116,7 +143,10 @@ export const API_ENDPOINTS = {
   },
   // Budgets
   BUDGETS: {
-    LIST: '/budgets/',
+    LIST: (params?: { ordering?: string }) => {
+      const query = buildQueryString(params || {});
+      return `/budgets${query}`;
+    },
     CREATE: '/budgets/',
     DETAIL: (id: number) => `/budgets/${id}/`,
     UPDATE: (id: number) => `/budgets/${id}/`,
@@ -128,7 +158,10 @@ export const API_ENDPOINTS = {
       type?: string;
       is_read?: boolean;
       ordering?: string;
-    }) => `/alerts/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/alerts${query}`;
+    },
     DETAIL: (id: number) => `/alerts/${id}/`,
     MARK_READ: (id: number) => `/alerts/${id}/mark_read/`,
     MARK_ALL_READ: '/alerts/mark_all_read/',
@@ -145,20 +178,29 @@ export const API_ENDPOINTS = {
       range?: 'today' | 'yesterday' | 'week' | 'month' | 'custom';
       start_date?: string;
       end_date?: string;
-    }) => `/dashboard/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/dashboard${query}`;
+    },
   },
   PROFIT_LOSS: {
     SUMMARY: (params?: {
       range?: 'today' | 'yesterday' | 'week' | 'month' | 'custom';
       start_date?: string;
       end_date?: string;
-    }) => `/profit-loss/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/profit-loss${query}`;
+    },
   },
   SUMMARIES: {
     SUMMARY: (params?: {
       range?: 'today' | 'yesterday' | 'week' | 'month' | 'custom';
       start_date?: string;
       end_date?: string;
-    }) => `/summaries/${buildQueryString(params || {})}`,
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/summaries${query}`;
+    },
   },
 };

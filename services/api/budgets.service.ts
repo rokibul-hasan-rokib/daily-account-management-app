@@ -8,14 +8,20 @@ import { API_ENDPOINTS } from './config';
 import {
   Budget,
   BudgetRequest,
+  BudgetListParams,
+  PaginatedResponse,
 } from './types';
 
 export class BudgetsService {
   /**
    * Get list of budgets
    */
-  static async getBudgets(): Promise<Budget[]> {
-    return await apiClient.get<Budget[]>(API_ENDPOINTS.BUDGETS.LIST);
+  static async getBudgets(
+    params?: BudgetListParams
+  ): Promise<Budget[] | PaginatedResponse<Budget>> {
+    return await apiClient.get<Budget[] | PaginatedResponse<Budget>>(
+      API_ENDPOINTS.BUDGETS.LIST(params)
+    );
   }
 
   /**
@@ -30,7 +36,7 @@ export class BudgetsService {
    */
   static async createBudget(data: BudgetRequest): Promise<Budget> {
     return await apiClient.post<Budget>(
-      API_ENDPOINTS.BUDGETS.LIST,
+      API_ENDPOINTS.BUDGETS.CREATE,
       data
     );
   }

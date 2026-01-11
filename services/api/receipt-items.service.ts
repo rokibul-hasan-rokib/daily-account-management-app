@@ -7,6 +7,7 @@ import { apiClient } from './client';
 import { API_ENDPOINTS } from './config';
 import {
   ReceiptItem,
+  ReceiptItemRequest,
   ReceiptItemListParams,
   ItemAnalyticsResponse,
   ItemAnalyticsParams,
@@ -22,6 +23,47 @@ export class ReceiptItemsService {
   ): Promise<ReceiptItem[] | PaginatedResponse<ReceiptItem>> {
     return await apiClient.get<ReceiptItem[] | PaginatedResponse<ReceiptItem>>(
       API_ENDPOINTS.RECEIPT_ITEMS.LIST(params)
+    );
+  }
+
+  /**
+   * Get receipt item by ID
+   */
+  static async getReceiptItemById(id: number): Promise<ReceiptItem> {
+    return await apiClient.get<ReceiptItem>(
+      API_ENDPOINTS.RECEIPT_ITEMS.DETAIL(id)
+    );
+  }
+
+  /**
+   * Create a new receipt item
+   */
+  static async createReceiptItem(data: ReceiptItemRequest): Promise<ReceiptItem> {
+    return await apiClient.post<ReceiptItem>(
+      API_ENDPOINTS.RECEIPT_ITEMS.CREATE,
+      data
+    );
+  }
+
+  /**
+   * Update receipt item
+   */
+  static async updateReceiptItem(
+    id: number,
+    data: Partial<ReceiptItemRequest>
+  ): Promise<ReceiptItem> {
+    return await apiClient.patch<ReceiptItem>(
+      API_ENDPOINTS.RECEIPT_ITEMS.DETAIL(id),
+      data
+    );
+  }
+
+  /**
+   * Delete receipt item
+   */
+  static async deleteReceiptItem(id: number): Promise<void> {
+    return await apiClient.delete<void>(
+      API_ENDPOINTS.RECEIPT_ITEMS.DETAIL(id)
     );
   }
 

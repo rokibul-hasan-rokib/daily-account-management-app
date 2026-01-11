@@ -34,6 +34,8 @@ export interface AuthResponse {
 export interface RegisterRequest {
   username: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
   password: string;
   password2: string;
 }
@@ -52,6 +54,7 @@ export interface Category {
   color?: string;
   description?: string;
   is_default?: boolean;
+  is_active?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -107,6 +110,7 @@ export interface Transaction {
   description?: string;
   notes?: string;
   is_recurring?: boolean;
+  recurring_frequency?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -149,12 +153,14 @@ export interface ReceiptItem {
 }
 
 export interface ReceiptItemRequest {
+  receipt?: number;
   item_name: string;
   quantity: string;
   unit_price: string;
   total_price: string;
   category?: number;
   product_code?: string;
+  notes?: string;
 }
 
 export interface Receipt {
@@ -182,7 +188,18 @@ export interface ReceiptRequest {
 
 export interface ReceiptExtractResponse {
   message: string;
-  receipt_id: number;
+  receipt?: Receipt;
+  receipt_id?: number;
+  extracted?: boolean;
+  confidence?: number;
+  items_extracted?: number;
+}
+
+export interface ReceiptUploadResponse {
+  message: string;
+  receipt: Receipt;
+  extracted: boolean;
+  confidence: number;
 }
 
 export interface ReceiptListParams {
@@ -236,6 +253,9 @@ export interface Liability {
   category?: number;
   category_name?: string;
   description?: string;
+  is_recurring?: boolean;
+  recurring_frequency?: string;
+  is_due_soon?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -247,6 +267,8 @@ export interface LiabilityRequest {
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   category?: number;
   description?: string;
+  is_recurring?: boolean;
+  recurring_frequency?: string;
 }
 
 export interface LiabilityListParams {
@@ -261,9 +283,12 @@ export interface LiabilityListParams {
 export interface CategoryRule {
   id: number;
   merchant?: number;
+  merchant_name?: string;
   keyword?: string;
   category: number;
+  category_name?: string;
   priority: number;
+  times_applied?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -275,15 +300,23 @@ export interface CategoryRuleRequest {
   priority?: number;
 }
 
+export interface CategoryRuleListParams {
+  ordering?: 'priority' | 'times_applied' | 'created_at';
+  page?: number;
+  page_size?: number;
+}
+
 // Budget types
 export interface Budget {
   id: number;
   category: number;
+  category_name?: string;
   amount: string;
   period: 'daily' | 'weekly' | 'monthly' | 'yearly';
   start_date: string;
   end_date?: string;
   alert_threshold?: number;
+  alert_sent?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -297,20 +330,30 @@ export interface BudgetRequest {
   alert_threshold?: number;
 }
 
+export interface BudgetListParams {
+  ordering?: 'start_date' | 'amount' | 'created_at';
+  page?: number;
+  page_size?: number;
+}
+
 // Alert types
 export interface Alert {
   id: number;
   type: string;
+  type_display?: string;
   title: string;
   message: string;
   is_read: boolean;
+  transaction?: number | null;
+  liability?: number | null;
+  category?: number | null;
   created_at: string;
 }
 
 export interface AlertListParams {
-  type?: string;
+  type?: 'bill_due' | 'overspend' | 'unusual_spend' | 'budget_alert' | string;
   is_read?: boolean;
-  ordering?: 'created_at';
+  ordering?: 'created_at' | '-created_at';
   page?: number;
   page_size?: number;
 }
@@ -320,12 +363,16 @@ export interface UserProfile {
   id?: number;
   user?: number;
   currency: string;
+  currency_display?: string;
   default_view?: string;
   show_balance?: boolean;
   show_profit_loss?: boolean;
   email_alerts?: boolean;
   push_alerts?: boolean;
   alert_days_before?: number;
+  user_username?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface UserProfileRequest {
@@ -361,19 +408,21 @@ export interface ProfitLossResponse {
   total_expense: string;
   net_profit: string;
   income_by_category: Array<{
-    category: string;
-    amount: string;
+    category__name: string;
+    total: string;
   }>;
   expense_by_category: Array<{
-    category: string;
-    amount: string;
+    category__name: string;
+    total: string;
   }>;
   monthly_data: Array<{
     month: string;
-    income: string;
-    expense: string;
-    profit: string;
+    income: number | string;
+    expense: number | string;
+    profit: number | string;
   }>;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface SummariesResponse {
@@ -384,9 +433,8 @@ export interface SummariesResponse {
   prev_expenses: string;
   prev_balance: string;
   category_expenses: Array<{
-    category: string;
-    amount: string;
-    percentage: number;
+    category__name: string;
+    total: string;
   }>;
   insights: string[];
   upcoming_bills: Liability[];
