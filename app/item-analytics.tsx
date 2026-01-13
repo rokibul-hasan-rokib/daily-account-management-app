@@ -98,9 +98,11 @@ export default function ItemAnalyticsScreen() {
           <MaterialIcons name="shopping-bag" size={32} color={Colors.text.inverse} />
           <ThemedText style={styles.totalLabel}>Total Item Spend</ThemedText>
           <ThemedText style={styles.totalValue}>{formatCurrency(totalSpend)}</ThemedText>
-          <ThemedText style={styles.totalSubtext}>
-            Across {itemAnalytics.length} different items
-          </ThemedText>
+          {analytics && (
+            <ThemedText style={styles.totalSubtext}>
+              Across {analytics.total_items || analytics.top_items.length} different items
+            </ThemedText>
+          )}
         </View>
       </Card>
 
