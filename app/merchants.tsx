@@ -1,45 +1,61 @@
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MenuButton } from '@/components/menu-button';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { useState, useMemo } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text, ActivityIndicator, Alert } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-interface Merchant {
-  id: string;
-  name: string;
-  category: string;
-  transactionCount: number;
-  totalSpent: number;
-  lastTransaction: string;
-}
-
-const dummyMerchants: Merchant[] = [
-  { id: '1', name: 'Tesco', category: 'Groceries', transactionCount: 25, totalSpent: 1250.50, lastTransaction: '2 days ago' },
-  { id: '2', name: 'Amazon', category: 'Shopping', transactionCount: 18, totalSpent: 890.25, lastTransaction: '5 days ago' },
-  { id: '3', name: 'Uber', category: 'Transport', transactionCount: 32, totalSpent: 450.00, lastTransaction: '1 day ago' },
-  { id: '4', name: 'Starbucks', category: 'Food & Drink', transactionCount: 15, totalSpent: 125.75, lastTransaction: '3 days ago' },
-];
+import { router } from 'expo-router';
+import { useMerchants } from '@/contexts/merchants-context';
+import { Merchant } from '@/services/api/types';
 
 export default function MerchantsScreen() {
-  const [merchants] = useState<Merchant[]>(dummyMerchants);
-  const [isAdding, setIsAdding] = useState(false);
-  const [newMerchantName, setNewMerchantName] = useState('');
+  const { 
+    merchants, 
+    isLoading, 
+    deleteMerchant: deleteMerchantFromContext,
+  } = useMerchants();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredMerchants = merchants.filter(merchant =>
-    merchant.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMerchants = useMemo(() => {
+    return merchants.filter(merchant =>
+      merchant.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [merchants, searchQuery]);
 
-  const handleAddMerchant = () => {
-    if (newMerchantName.trim()) {
-      console.log('Adding merchant:', newMerchantName);
-      setNewMerchantName('');
-      setIsAdding(false);
-    }
+  const handleDeleteMerchant = async (id: number, name: string) => {
+    Alert.alert(
+      'Delete Merchant',
+      `Are you sure you want to delete "${name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMerchantFromContext(id);
+              Alert.alert('Success', 'Merchant deleted successfully');
+            } catch (error: any) {
+              console.error('Error deleting merchant:', error);
+              Alert.alert('Error', error.message || 'Failed to delete merchant');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditMerchant = (merchant: Merchant) => {
+    router.push({
+      pathname: '/merchants/add',
+      params: { 
+        id: merchant.id.toString(),
+        name: merchant.name,
+        default_category: merchant.default_category?.toString() || '',
+      },
+    });
   };
 
   return (
@@ -57,9 +73,9 @@ export default function MerchantsScreen() {
         </View>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setIsAdding(!isAdding)}
+          onPress={() => router.push('/merchants/add')}
         >
-          <MaterialIcons name={isAdding ? "close" : "add"} size={24} color={Colors.text.inverse} />
+          <MaterialIcons name="add" size={24} color={Colors.text.inverse} />
         </TouchableOpacity>
       </View>
 
@@ -73,54 +89,70 @@ export default function MerchantsScreen() {
         />
       </View>
 
-      {/* Add Merchant Form */}
-      {isAdding && (
-        <Card variant="elevated" style={styles.addFormCard}>
-          <ThemedText type="subtitle" style={styles.formTitle}>Add New Merchant</ThemedText>
-          <Input
-            label="Merchant Name"
-            placeholder="e.g., Tesco, Amazon"
-            value={newMerchantName}
-            onChangeText={setNewMerchantName}
-          />
-          <Button
-            title="Add Merchant"
-            variant="primary"
-            onPress={handleAddMerchant}
-            style={styles.addFormButton}
-          />
-        </Card>
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading merchants...</ThemedText>
+        </View>
+      ) : (
+        <>
+          {/* Merchants List */}
+          <View style={styles.merchantsList}>
+            {filteredMerchants.length === 0 ? (
+              <Card variant="elevated" style={styles.emptyCard}>
+                <MaterialIcons name="store" size={48} color={Colors.text.tertiary} />
+                <ThemedText style={styles.emptyText}>
+                  No merchants found. Create your first merchant!
+                </ThemedText>
+              </Card>
+            ) : (
+              filteredMerchants.map((merchant) => (
+                <Card key={merchant.id} variant="elevated" style={styles.merchantCard}>
+                  <TouchableOpacity
+                    style={styles.merchantContent}
+                    onPress={() => handleEditMerchant(merchant)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.merchantIcon}>
+                      <MaterialIcons name="store" size={24} color={Colors.primary[600]} />
+                    </View>
+                    <View style={styles.merchantInfo}>
+                      <ThemedText style={styles.merchantName}>{merchant.name}</ThemedText>
+                      {merchant.default_category_name && (
+                        <View style={styles.merchantMeta}>
+                          <Text style={styles.merchantCategory}>{merchant.default_category_name}</Text>
+                        </View>
+                      )}
+                      {merchant.created_at && (
+                        <Text style={styles.lastTransaction}>
+                          Created: {new Date(merchant.created_at).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                  <View style={styles.merchantActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEditMerchant(merchant)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="edit" size={20} color={Colors.primary[600]} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleDeleteMerchant(merchant.id, merchant.name)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="delete" size={20} color={Colors.error.main} />
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              ))
+            )}
+          </View>
+        </>
       )}
-
-      {/* Merchants List */}
-      <View style={styles.merchantsList}>
-        {filteredMerchants.map((merchant) => (
-          <Card key={merchant.id} variant="elevated" style={styles.merchantCard}>
-            <View style={styles.merchantContent}>
-              <View style={styles.merchantIcon}>
-                <MaterialIcons name="store" size={24} color={Colors.primary[600]} />
-              </View>
-              <View style={styles.merchantInfo}>
-                <ThemedText style={styles.merchantName}>{merchant.name}</ThemedText>
-                <View style={styles.merchantMeta}>
-                  <Text style={styles.merchantCategory}>{merchant.category}</Text>
-                  <Text style={styles.metaSeparator}>•</Text>
-                  <Text style={styles.merchantCount}>
-                    {merchant.transactionCount} transaction{merchant.transactionCount !== 1 ? 's' : ''}
-                  </Text>
-                </View>
-                <Text style={styles.lastTransaction}>
-                  Last: {merchant.lastTransaction}
-                </Text>
-              </View>
-              <View style={styles.merchantAmount}>
-                <ThemedText style={styles.amountValue}>£{merchant.totalSpent.toFixed(2)}</ThemedText>
-                <Text style={styles.amountLabel}>Total</Text>
-              </View>
-            </View>
-          </Card>
-        ))}
-      </View>
     </ScrollView>
   );
 }
@@ -167,19 +199,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.md,
   },
-  addFormCard: {
+  loadingContainer: {
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    color: Colors.text.secondary,
+  },
+  emptyCard: {
     marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-    padding: Spacing.lg,
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  formTitle: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.bold,
-    marginBottom: Spacing.md,
-    color: Colors.text.primary,
-  },
-  addFormButton: {
-    width: '100%',
+  emptyText: {
+    marginTop: Spacing.md,
+    textAlign: 'center',
+    color: Colors.text.secondary,
   },
   merchantsList: {
     paddingHorizontal: Spacing.lg,
@@ -188,11 +226,13 @@ const styles = StyleSheet.create({
   },
   merchantCard: {
     padding: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   merchantContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+    flex: 1,
   },
   merchantIcon: {
     width: 48,
@@ -231,18 +271,22 @@ const styles = StyleSheet.create({
   lastTransaction: {
     fontSize: Typography.fontSize.xs,
     color: Colors.text.tertiary,
+    marginTop: Spacing.xs,
   },
-  merchantAmount: {
-    alignItems: 'flex-end',
+  merchantActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray[200],
   },
-  amountValue: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.text.primary,
-    marginBottom: Spacing.xs,
-  },
-  amountLabel: {
-    fontSize: Typography.fontSize.xs,
-    color: Colors.text.secondary,
+  actionButton: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: Colors.gray[50],
   },
 });

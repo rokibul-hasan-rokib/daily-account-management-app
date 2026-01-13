@@ -4,52 +4,105 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, Shadows, Spacing, Typography } from '@/constants/design-system';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useState, useMemo } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
+import { useTransactions } from '@/contexts/transactions-context';
+import { useCategories } from '@/contexts/categories-context';
+import { useMerchants } from '@/contexts/merchants-context';
 
 type TransactionType = 'income' | 'expense';
 
-const categories = {
-  income: [
-    { label: 'Salary', value: 'salary', icon: 'account-balance-wallet' },
-    { label: 'Freelance', value: 'freelance', icon: 'work' },
-    { label: 'Sales', value: 'sales', icon: 'trending-up' },
-    { label: 'Investment', value: 'investment', icon: 'show-chart' },
-    { label: 'Other Income', value: 'other-income', icon: 'more-horiz' },
-  ],
-  expense: [
-    { label: 'Groceries', value: 'groceries', icon: 'shopping-cart' },
-    { label: 'Transport', value: 'transport', icon: 'directions-car' },
-    { label: 'Utilities', value: 'utilities', icon: 'bolt' },
-    { label: 'Rent', value: 'rent', icon: 'home' },
-    { label: 'Raw Materials', value: 'raw-materials', icon: 'inventory' },
-    { label: 'Equipment', value: 'equipment', icon: 'build' },
-    { label: 'Marketing', value: 'marketing', icon: 'campaign' },
-    { label: 'Other Expense', value: 'other-expense', icon: 'more-horiz' },
-  ],
+// Helper to format date to YYYY-MM-DD
+const formatDateForAPI = (dateString: string): string => {
+  // If already in YYYY-MM-DD format, return as is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  // Convert DD/MM/YYYY to YYYY-MM-DD
+  const parts = dateString.split('/');
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  // Default to today
+  const today = new Date();
+  return today.toISOString().split('T')[0];
 };
 
 export default function AddTransactionScreen() {
-  const [type, setType] = useState<TransactionType>('expense');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
-  const [merchantName, setMerchant] = useState('');
-  const [date, setDate] = useState(new Date().toLocaleDateString('en-GB'));
+  const params = useLocalSearchParams();
+  const isEditMode = !!params.id;
+  const { createTransaction, updateTransaction } = useTransactions();
+  const { categories } = useCategories();
+  const { merchants } = useMerchants();
+  
+  const [type, setType] = useState<TransactionType>((params.type as TransactionType) || 'expense');
+  const [amount, setAmount] = useState(params.amount?.toString() || '');
+  const [description, setDescription] = useState(params.description?.toString() || '');
+  const [categoryId, setCategoryId] = useState<number | undefined>(
+    params.category ? parseInt(params.category.toString()) : undefined
+  );
+  const [merchantId, setMerchantId] = useState<number | undefined>(
+    params.merchant ? parseInt(params.merchant.toString()) : undefined
+  );
+  const [notes, setNotes] = useState(params.notes?.toString() || '');
+  const [date, setDate] = useState(
+    params.date ? formatDateForAPI(params.date.toString()) : new Date().toISOString().split('T')[0]
+  );
+  const [isRecurring, setIsRecurring] = useState(params.is_recurring === 'true');
+  const [recurringFrequency, setRecurringFrequency] = useState(params.recurring_frequency?.toString() || '');
+  const [loading, setLoading] = useState(false);
 
-  const handleSave = () => {
-    if (!amount || !description || !category) {
-      alert('Please fill in all required fields');
+  // Filter categories by type
+  const filteredCategories = useMemo(() => {
+    return categories.filter(cat => cat.type === type);
+  }, [categories, type]);
+
+  // Format date for display (YYYY-MM-DD to DD/MM/YYYY)
+  const displayDate = useMemo(() => {
+    const parts = date.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return date;
+  }, [date]);
+
+  const handleSave = async () => {
+    if (!amount || !description || !categoryId) {
+      Alert.alert('Validation Error', 'Please fill in all required fields');
       return;
     }
-    // In real app, this would save to backend/state
-    console.log({ type, amount, description, category, merchantName, date });
-    router.back();
+
+    try {
+      setLoading(true);
+      const transactionData = {
+        type,
+        amount: parseFloat(amount).toFixed(2),
+        date: formatDateForAPI(date),
+        category: categoryId,
+        merchant: merchantId,
+        description: description.trim(),
+        notes: notes.trim() || undefined,
+        is_recurring: isRecurring,
+        recurring_frequency: recurringFrequency || undefined,
+      };
+
+      if (isEditMode && params.id) {
+        await updateTransaction(parseInt(params.id.toString()), transactionData);
+        router.replace('/transactions');
+      } else {
+        await createTransaction(transactionData);
+        router.replace('/transactions');
+      }
+    } catch (error: any) {
+      console.error('Error saving transaction:', error);
+      Alert.alert('Error', error.message || 'Failed to save transaction');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const categoryList = categories[type];
-  const isValid = amount && description && category;
+  const isValid = amount && description && categoryId;
 
   return (
     <KeyboardAvoidingView 
@@ -72,9 +125,13 @@ export default function AddTransactionScreen() {
             <MaterialIcons name="arrow-back" size={24} color={Colors.text.primary} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <ThemedText type="title" style={styles.headerTitle}>New Transaction</ThemedText>
+            <ThemedText type="title" style={styles.headerTitle}>
+              {isEditMode ? 'Edit Transaction' : 'New Transaction'}
+            </ThemedText>
             <ThemedText style={styles.headerSubtitle}>
-              {type === 'income' ? 'Add income' : 'Add expense'}
+              {isEditMode 
+                ? 'Update transaction details' 
+                : type === 'income' ? 'Add income' : 'Add expense'}
             </ThemedText>
           </View>
           <View style={styles.headerRight} />
@@ -91,7 +148,7 @@ export default function AddTransactionScreen() {
             ]}
             onPress={() => {
               setType('income');
-              setCategory('');
+              setCategoryId(undefined);
             }}
             activeOpacity={0.8}
           >
@@ -121,7 +178,7 @@ export default function AddTransactionScreen() {
             ]}
             onPress={() => {
               setType('expense');
-              setCategory('');
+              setCategoryId(undefined);
             }}
             activeOpacity={0.8}
           >
@@ -196,69 +253,120 @@ export default function AddTransactionScreen() {
           <View style={styles.categorySection}>
             <View style={styles.categoryHeader}>
               <Text style={styles.categoryLabel}>Category *</Text>
-              {category && (
-                <TouchableOpacity onPress={() => setCategory('')}>
+              {categoryId && (
+                <TouchableOpacity onPress={() => setCategoryId(undefined)}>
                   <Text style={styles.clearCategory}>Clear</Text>
                 </TouchableOpacity>
               )}
             </View>
-            <View style={styles.categoryGrid}>
-              {categoryList.map((cat) => (
+            {filteredCategories.length === 0 ? (
+              <Text style={styles.noCategoriesText}>
+                No {type} categories available. Please create one first.
+              </Text>
+            ) : (
+              <View style={styles.categoryGrid}>
+                {filteredCategories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryChip,
+                      categoryId === cat.id && styles.categoryChipActive,
+                      categoryId === cat.id && type === 'income' && styles.categoryChipActiveIncome,
+                      categoryId === cat.id && type === 'expense' && styles.categoryChipActiveExpense
+                    ]}
+                    onPress={() => setCategoryId(cat.id)}
+                    activeOpacity={0.7}
+                  >
+                    {cat.icon ? (
+                      <Text style={styles.categoryIconEmoji}>{cat.icon}</Text>
+                    ) : (
+                      <MaterialIcons 
+                        name="category" 
+                        size={18} 
+                        color={categoryId === cat.id ? Colors.text.inverse : Colors.text.secondary} 
+                      />
+                    )}
+                    <Text style={[
+                      styles.categoryChipText,
+                      categoryId === cat.id && styles.categoryChipTextActive
+                    ]}>
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Merchant Selection */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Merchant (Optional)</Text>
+            <View style={styles.merchantGrid}>
+              <TouchableOpacity
+                style={[
+                  styles.merchantChip,
+                  !merchantId && styles.merchantChipActive
+                ]}
+                onPress={() => setMerchantId(undefined)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.merchantChipText,
+                  !merchantId && styles.merchantChipTextActive
+                ]}>
+                  None
+                </Text>
+              </TouchableOpacity>
+              {merchants.map((merchant) => (
                 <TouchableOpacity
-                  key={cat.value}
+                  key={merchant.id}
                   style={[
-                    styles.categoryChip,
-                    category === cat.value && styles.categoryChipActive,
-                    category === cat.value && type === 'income' && styles.categoryChipActiveIncome,
-                    category === cat.value && type === 'expense' && styles.categoryChipActiveExpense
+                    styles.merchantChip,
+                    merchantId === merchant.id && styles.merchantChipActive
                   ]}
-                  onPress={() => setCategory(cat.value)}
+                  onPress={() => setMerchantId(merchant.id)}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons 
-                    name={cat.icon as any} 
-                    size={18} 
-                    color={category === cat.value ? Colors.text.inverse : Colors.text.secondary} 
-                  />
                   <Text style={[
-                    styles.categoryChipText,
-                    category === cat.value && styles.categoryChipTextActive
+                    styles.merchantChipText,
+                    merchantId === merchant.id && styles.merchantChipTextActive
                   ]}>
-                    {cat.label}
+                    {merchant.name}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          {/* Merchant */}
+          {/* Notes */}
           <Input
-            label="Merchant"
-            placeholder="e.g., Tesco, Uber, Amazon"
-            value={merchantName}
-            onChangeText={setMerchant}
-            leftIcon={<MaterialIcons name="store" size={20} color={Colors.primary[500]} />}
+            label="Notes (Optional)"
+            placeholder="Additional notes about this transaction"
+            value={notes}
+            onChangeText={setNotes}
+            leftIcon={<MaterialIcons name="notes" size={20} color={Colors.primary[500]} />}
             containerStyle={styles.inputContainer}
+            multiline
+            numberOfLines={3}
           />
 
           {/* Date */}
-          <TouchableOpacity 
-            style={styles.dateContainer}
-            activeOpacity={0.7}
-            onPress={() => {
-              // In real app, open date picker
-              alert('Date picker coming soon!');
+          <Input
+            label="Date *"
+            placeholder="YYYY-MM-DD"
+            value={date}
+            onChangeText={(text) => {
+              // Allow YYYY-MM-DD format
+              const cleaned = text.replace(/[^0-9-]/g, '');
+              if (cleaned.length <= 10) {
+                setDate(cleaned);
+              }
             }}
-          >
-            <View style={styles.dateInput}>
-              <MaterialIcons name="calendar-today" size={20} color={Colors.primary[500]} />
-              <View style={styles.dateContent}>
-                <Text style={styles.dateLabel}>Date</Text>
-                <Text style={styles.dateValue}>{date}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.primary[400]} />
-            </View>
-          </TouchableOpacity>
+            leftIcon={<MaterialIcons name="calendar-today" size={20} color={Colors.primary[500]} />}
+            containerStyle={styles.inputContainer}
+            keyboardType="numeric"
+          />
+          <Text style={styles.dateHint}>Format: YYYY-MM-DD (e.g., 2024-01-15)</Text>
 
           {/* Action Buttons - Enhanced */}
           <View style={styles.actions}>
@@ -267,15 +375,21 @@ export default function AddTransactionScreen() {
               variant="outline"
               onPress={() => router.back()}
               style={styles.cancelButton}
+              disabled={loading}
             />
             <Button
-              title="Save Transaction"
+              title={loading ? 'Saving...' : isEditMode ? 'Update Transaction' : 'Save Transaction'}
               variant="primary"
               onPress={handleSave}
-              disabled={!isValid}
-              style={[styles.saveButton, !isValid && styles.saveButtonDisabled]}
+              disabled={!isValid || loading}
+              style={[styles.saveButton, (!isValid || loading) && styles.saveButtonDisabled]}
             />
           </View>
+          {loading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={Colors.primary[500]} />
+            </View>
+          )}
 
           {/* Helper Text */}
           <Text style={styles.helperText}>
@@ -515,33 +629,56 @@ const styles = StyleSheet.create({
   categoryChipTextActive: {
     color: Colors.text.inverse,
   },
-  dateContainer: {
+  categoryIconEmoji: {
+    fontSize: 18,
+  },
+  noCategoriesText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+    fontStyle: 'italic',
+    padding: Spacing.md,
+    textAlign: 'center',
+  },
+  section: {
     marginBottom: Spacing.lg,
   },
-  dateInput: {
+  sectionLabel: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.primary[700],
+    marginBottom: Spacing.sm,
+  },
+  merchantGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary[50],
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.primary[200],
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
-  dateContent: {
-    flex: 1,
+  merchantChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primary[50],
+    borderWidth: 1.5,
+    borderColor: Colors.primary[200],
   },
-  dateLabel: {
-    fontSize: Typography.fontSize.xs,
+  merchantChipActive: {
+    backgroundColor: Colors.primary[500],
+    borderColor: Colors.primary[600],
+  },
+  merchantChipText: {
+    fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semibold,
     color: Colors.primary[600],
-    marginBottom: Spacing.xs,
   },
-  dateValue: {
-    fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.medium,
-    color: Colors.primary[700],
+  merchantChipTextActive: {
+    color: Colors.text.inverse,
+  },
+  dateHint: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.tertiary,
+    marginTop: -Spacing.md,
+    marginBottom: Spacing.md,
+    marginLeft: Spacing.md,
   },
   actions: {
     flexDirection: 'row',
@@ -562,5 +699,15 @@ const styles = StyleSheet.create({
     color: Colors.primary[500],
     textAlign: 'center',
     marginTop: Spacing.md,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

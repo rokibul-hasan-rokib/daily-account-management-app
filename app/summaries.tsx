@@ -200,127 +200,138 @@ export default function SummariesScreen() {
         ))}
       </View>
 
-      {/* Summary Overview Card */}
-      <Card variant="elevated" style={styles.summaryCard}>
-        <View style={styles.summaryHeader}>
-          <MaterialIcons name="assessment" size={24} color={Colors.primary[600]} />
-          <ThemedText type="subtitle" style={styles.summaryTitle}>
-            {periodLabel} Summary
-          </ThemedText>
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading summaries...</ThemedText>
         </View>
-        <View style={styles.summaryStats}>
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryStatLabel}>Money In</Text>
-            <Text style={[styles.summaryStatValue, { color: Colors.success.main }]}>
-              {formatCurrency(totalIncome)}
-            </Text>
-          </View>
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryStatLabel}>Money Out</Text>
-            <Text style={[styles.summaryStatValue, { color: Colors.error.main }]}>
-              {formatCurrency(totalExpenses)}
-            </Text>
-          </View>
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryStatLabel}>Balance</Text>
-            <Text style={[
-              styles.summaryStatValue,
-              balance >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
-            ]}>
-              {formatCurrency(balance)}
-            </Text>
-          </View>
-          <View style={styles.summaryStat}>
-            <Text style={styles.summaryStatLabel}>Profit/Loss</Text>
-            <Text style={[
-              styles.summaryStatValue,
-              profitLoss >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
-            ]}>
-              {formatCurrency(profitLoss)}
-            </Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Insights */}
-      <Card variant="elevated" style={styles.insightsCard}>
-        <View style={styles.insightsHeader}>
-          <MaterialIcons name="lightbulb" size={20} color={Colors.warning.main} />
-          <ThemedText type="subtitle" style={styles.insightsTitle}>
-            Key Insights
-          </ThemedText>
-        </View>
-        <View style={styles.insightsList}>
-          {insights.map((insight, index) => (
-            <View key={index} style={styles.insightItem}>
-              <View style={[styles.insightIcon, { backgroundColor: `${insight.color}20` }]}>
-                <MaterialIcons name={insight.icon as any} size={20} color={insight.color} />
+      ) : (
+        <>
+          {/* Summary Overview Card */}
+          <Card variant="elevated" style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <MaterialIcons name="assessment" size={24} color={Colors.primary[600]} />
+              <ThemedText type="subtitle" style={styles.summaryTitle}>
+                {periodLabel} Summary
+              </ThemedText>
+            </View>
+            <View style={styles.summaryStats}>
+              <View style={styles.summaryStat}>
+                <Text style={styles.summaryStatLabel}>Money In</Text>
+                <Text style={[styles.summaryStatValue, { color: Colors.success.main }]}>
+                  {formatCurrency(totalIncome)}
+                </Text>
+                {prevIncome > 0 && (
+                  <Text style={styles.summaryStatChange}>
+                    Prev: {formatCurrency(prevIncome)}
+                  </Text>
+                )}
               </View>
-              <View style={styles.insightContent}>
-                <Text style={styles.insightTitle}>{insight.title}</Text>
-                <Text style={styles.insightMessage}>{insight.message}</Text>
+              <View style={styles.summaryStat}>
+                <Text style={styles.summaryStatLabel}>Money Out</Text>
+                <Text style={[styles.summaryStatValue, { color: Colors.error.main }]}>
+                  {formatCurrency(totalExpenses)}
+                </Text>
+                {prevExpenses > 0 && (
+                  <Text style={styles.summaryStatChange}>
+                    Prev: {formatCurrency(prevExpenses)}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.summaryStat}>
+                <Text style={styles.summaryStatLabel}>Balance</Text>
+                <Text style={[
+                  styles.summaryStatValue,
+                  balance >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
+                ]}>
+                  {formatCurrency(balance)}
+                </Text>
+                {prevBalance !== 0 && (
+                  <Text style={styles.summaryStatChange}>
+                    Prev: {formatCurrency(prevBalance)}
+                  </Text>
+                )}
               </View>
             </View>
-          ))}
-        </View>
-      </Card>
+          </Card>
 
-      {/* Category Breakdown */}
-      {categoryBreakdown.length > 0 && (
-        <Card variant="elevated" style={styles.categoryCard}>
-          <View style={styles.categoryHeader}>
-            <MaterialIcons name="pie-chart" size={20} color={Colors.primary[600]} />
-            <ThemedText type="subtitle" style={styles.categoryTitle}>
-              Where Your Money Went
-            </ThemedText>
-          </View>
-          <View style={styles.categoryList}>
-            {categoryBreakdown.map(([category, data]) => {
-              const percentage = ((data.amount / totalExpenses) * 100).toFixed(0);
-              return (
-                <View key={category} style={styles.categoryItem}>
-                  <View style={styles.categoryInfo}>
-                    <Text style={styles.categoryName}>
-                      {category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ')}
-                    </Text>
-                    <Text style={styles.categoryMeta}>
-                      {data.count} transaction{data.count !== 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                  <View style={styles.categoryAmount}>
-                    <Text style={styles.categoryAmountValue}>{formatCurrency(data.amount)}</Text>
-                    <Badge label={`${percentage}%`} variant="info" size="sm" />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </Card>
-      )}
-
-      {/* Upcoming Bills */}
-      {getUpcomingLiabilities().length > 0 && (
-        <Card variant="elevated" style={styles.billsCard}>
-          <View style={styles.billsHeader}>
-            <MaterialIcons name="event" size={20} color={Colors.warning.main} />
-            <ThemedText type="subtitle" style={styles.billsTitle}>
-              Upcoming Bills
-            </ThemedText>
-          </View>
-          <View style={styles.billsList}>
-            {getUpcomingLiabilities().slice(0, 3).map((bill) => (
-              <View key={bill.id} style={styles.billItem}>
-                <View style={styles.billInfo}>
-                  <Text style={styles.billName}>{bill.name}</Text>
-                  <Text style={styles.billDue}>
-                    Due {bill.dueDate.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
-                  </Text>
-                </View>
-                <Text style={styles.billAmount}>{formatCurrency(bill.amount)}</Text>
+          {/* Insights */}
+          {insights.length > 0 && (
+            <Card variant="elevated" style={styles.insightsCard}>
+              <View style={styles.insightsHeader}>
+                <MaterialIcons name="lightbulb" size={20} color={Colors.warning.main} />
+                <ThemedText type="subtitle" style={styles.insightsTitle}>
+                  Key Insights
+                </ThemedText>
               </View>
-            ))}
-          </View>
-        </Card>
+              <View style={styles.insightsList}>
+                {insights.map((insight, index) => (
+                  <View key={index} style={styles.insightItem}>
+                    <View style={styles.insightDot} />
+                    <ThemedText style={styles.insightText}>{insight}</ThemedText>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+
+          {/* Category Breakdown */}
+          {categoryExpenses.length > 0 && (
+            <Card variant="elevated" style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <MaterialIcons name="pie-chart" size={20} color={Colors.primary[600]} />
+                <ThemedText type="subtitle" style={styles.categoryTitle}>
+                  Where Your Money Went
+                </ThemedText>
+              </View>
+              <View style={styles.categoryList}>
+                {categoryExpenses.map((item, index) => {
+                  const amount = parseFloat(item.total);
+                  const percentage = totalExpenses > 0 ? ((amount / totalExpenses) * 100).toFixed(0) : '0';
+                  return (
+                    <View key={index} style={styles.categoryItem}>
+                      <View style={styles.categoryInfo}>
+                        <Text style={styles.categoryName}>
+                          {item.category__name}
+                        </Text>
+                      </View>
+                      <View style={styles.categoryAmount}>
+                        <Text style={styles.categoryAmountValue}>{formatCurrency(amount)}</Text>
+                        <Badge label={`${percentage}%`} variant="info" size="sm" />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          )}
+
+          {/* Upcoming Bills */}
+          {upcomingBills.length > 0 && (
+            <Card variant="elevated" style={styles.billsCard}>
+              <View style={styles.billsHeader}>
+                <MaterialIcons name="event" size={20} color={Colors.warning.main} />
+                <ThemedText type="subtitle" style={styles.billsTitle}>
+                  Upcoming Bills
+                </ThemedText>
+              </View>
+              <View style={styles.billsList}>
+                {upcomingBills.slice(0, 5).map((bill) => (
+                  <View key={bill.id} style={styles.billItem}>
+                    <View style={styles.billInfo}>
+                      <Text style={styles.billName}>{bill.name}</Text>
+                      <Text style={styles.billDue}>
+                        Due {new Date(bill.due_date).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
+                      </Text>
+                    </View>
+                    <Text style={styles.billAmount}>{formatCurrency(parseFloat(bill.amount))}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -375,6 +386,15 @@ const styles = StyleSheet.create({
   periodButtonTextActive: {
     color: Colors.text.inverse,
   },
+  loadingContainer: {
+    padding: Spacing['3xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    color: Colors.text.secondary,
+  },
   summaryCard: {
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
@@ -413,6 +433,11 @@ const styles = StyleSheet.create({
   summaryStatValue: {
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.bold,
+  },
+  summaryStatChange: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.tertiary,
+    marginTop: Spacing.xs,
   },
   insightsCard: {
     marginHorizontal: Spacing.lg,
@@ -460,6 +485,19 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
     color: Colors.text.secondary,
     lineHeight: Typography.fontSize.sm * 1.5,
+  },
+  insightDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.warning.main,
+    marginTop: 6,
+  },
+  insightText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.primary,
+    lineHeight: Typography.fontSize.base * Typography.lineHeight.normal,
+    flex: 1,
   },
   categoryCard: {
     marginHorizontal: Spacing.lg,

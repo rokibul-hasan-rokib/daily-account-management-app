@@ -1,33 +1,86 @@
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
 import { MenuButton } from '@/components/menu-button';
-import { dummyTransactions } from '@/data/dummy-data';
-import { formatCurrency, formatDateRelative, getCategoryColor, getCategoryLabel } from '@/utils/helpers';
+import { formatCurrency, formatDateRelative } from '@/utils/helpers';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { Link } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useState, useMemo, useCallback } from 'react';
+import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useTransactions } from '@/contexts/transactions-context';
+import { Transaction } from '@/services/api/types';
 
 export default function TransactionsScreen() {
+  const { transactions, isLoading, deleteTransaction: deleteTransactionFromContext, refreshTransactions } = useTransactions();
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredTransactions = dummyTransactions
-    .filter(t => {
-      if (filter !== 'all' && t.type !== filter) return false;
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return (
-          t.description.toLowerCase().includes(query) ||
-          t.merchantName?.toLowerCase().includes(query) ||
-          t.category.toLowerCase().includes(query)
-        );
-      }
-      return true;
-    })
-    .sort((a, b) => b.date.getTime() - a.date.getTime());
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const params = filter !== 'all' ? { type: filter } : undefined;
+      refreshTransactions(params);
+    }, [filter, refreshTransactions])
+  );
+
+  const filteredTransactions = useMemo(() => {
+    return transactions
+      .filter(t => {
+        if (filter !== 'all' && t.type !== filter) return false;
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          return (
+            t.description?.toLowerCase().includes(query) ||
+            t.merchant_name?.toLowerCase().includes(query) ||
+            t.category_name?.toLowerCase().includes(query) ||
+            t.notes?.toLowerCase().includes(query)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, filter, searchQuery]);
+
+  const handleDeleteTransaction = async (id: number, description: string) => {
+    Alert.alert(
+      'Delete Transaction',
+      `Are you sure you want to delete "${description || 'this transaction'}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTransactionFromContext(id);
+              Alert.alert('Success', 'Transaction deleted successfully');
+            } catch (error: any) {
+              console.error('Error deleting transaction:', error);
+              Alert.alert('Error', error.message || 'Failed to delete transaction');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    router.push({
+      pathname: '/transactions/add',
+      params: {
+        id: transaction.id.toString(),
+        type: transaction.type,
+        amount: transaction.amount,
+        date: transaction.date,
+        category: transaction.category.toString(),
+        merchant: transaction.merchant?.toString() || '',
+        description: transaction.description || '',
+        notes: transaction.notes || '',
+        is_recurring: transaction.is_recurring?.toString() || 'false',
+        recurring_frequency: transaction.recurring_frequency || '',
+      },
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -42,11 +95,12 @@ export default function TransactionsScreen() {
             </ThemedText>
           </View>
         </View>
-        <Link href="/transactions/add" asChild>
-          <TouchableOpacity style={styles.addButton}>
-            <MaterialIcons name="add" size={24} color={Colors.text.inverse} />
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => router.push('/transactions/add')}
+        >
+          <MaterialIcons name="add" size={24} color={Colors.text.inverse} />
+        </TouchableOpacity>
       </View>
 
       {/* Search */}
@@ -88,91 +142,123 @@ export default function TransactionsScreen() {
       </View>
 
       {/* Transaction List */}
-      <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-        {filteredTransactions.map((transaction, index) => (
-          <Card key={transaction.id} variant="elevated" style={styles.transactionCard}>
-            <View style={styles.transactionContent}>
-              <View style={[
-                styles.categoryIndicator,
-                { backgroundColor: getCategoryColor(transaction.category) }
-              ]} />
-              
-              <View style={styles.transactionInfo}>
-                <View style={styles.transactionHeader}>
-                  <ThemedText style={styles.transactionDescription} numberOfLines={1}>
-                    {transaction.description}
-                  </ThemedText>
-                  <ThemedText style={[
-                    styles.transactionAmount,
-                    transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount
-                  ]}>
-                    {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
-                  </ThemedText>
-                </View>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading transactions...</ThemedText>
+        </View>
+      ) : (
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+          {filteredTransactions.map((transaction) => (
+            <Card key={transaction.id} variant="elevated" style={styles.transactionCard}>
+              <TouchableOpacity
+                style={styles.transactionContent}
+                onPress={() => handleEditTransaction(transaction)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.categoryIndicator,
+                  { backgroundColor: transaction.type === 'income' ? Colors.success.main : Colors.error.main }
+                ]} />
                 
-                <View style={styles.transactionMeta}>
-                  <View style={styles.metaItem}>
-                    <MaterialIcons 
-                      name="label" 
-                      size={14} 
-                      color={Colors.text.secondary} 
-                    />
-                    <ThemedText style={styles.transactionCategory}>
-                      {getCategoryLabel(transaction.category)}
+                <View style={styles.transactionInfo}>
+                  <View style={styles.transactionHeader}>
+                    <ThemedText style={styles.transactionDescription} numberOfLines={1}>
+                      {transaction.description || 'No description'}
+                    </ThemedText>
+                    <ThemedText style={[
+                      styles.transactionAmount,
+                      transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount
+                    ]}>
+                      {transaction.type === 'income' ? '+' : '-'}{formatCurrency(parseFloat(transaction.amount))}
                     </ThemedText>
                   </View>
                   
-                  {transaction.merchantName && (
-                    <>
-                      <View style={styles.metaSeparator} />
-                      <View style={styles.metaItem}>
-                        <MaterialIcons 
-                          name="store" 
-                          size={14} 
-                          color={Colors.text.secondary} 
-                        />
-                        <ThemedText style={styles.transactionMerchant}>
-                          {transaction.merchantName}
-                        </ThemedText>
-                      </View>
-                    </>
-                  )}
+                  <View style={styles.transactionMeta}>
+                    {transaction.category_name && (
+                      <>
+                        <View style={styles.metaItem}>
+                          <MaterialIcons 
+                            name="label" 
+                            size={14} 
+                            color={Colors.text.secondary} 
+                          />
+                          <ThemedText style={styles.transactionCategory}>
+                            {transaction.category_name}
+                          </ThemedText>
+                        </View>
+                      </>
+                    )}
+                    
+                    {transaction.merchant_name && (
+                      <>
+                        {transaction.category_name && <View style={styles.metaSeparator} />}
+                        <View style={styles.metaItem}>
+                          <MaterialIcons 
+                            name="store" 
+                            size={14} 
+                            color={Colors.text.secondary} 
+                          />
+                          <ThemedText style={styles.transactionMerchant}>
+                            {transaction.merchant_name}
+                          </ThemedText>
+                        </View>
+                      </>
+                    )}
+                  </View>
+                  
+                  <View style={styles.transactionFooter}>
+                    <MaterialIcons 
+                      name="schedule" 
+                      size={14} 
+                      color={Colors.text.tertiary} 
+                    />
+                    <ThemedText style={styles.transactionDate}>
+                      {formatDateRelative(new Date(transaction.date))}
+                    </ThemedText>
+                  </View>
                 </View>
-                
-                <View style={styles.transactionFooter}>
-                  <MaterialIcons 
-                    name="schedule" 
-                    size={14} 
-                    color={Colors.text.tertiary} 
-                  />
-                  <ThemedText style={styles.transactionDate}>
-                    {formatDateRelative(transaction.date)}
-                  </ThemedText>
-                </View>
+              </TouchableOpacity>
+              <View style={styles.transactionActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleEditTransaction(transaction)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="edit" size={18} color={Colors.primary[600]} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleDeleteTransaction(transaction.id, transaction.description || '')}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="delete" size={18} color={Colors.error.main} />
+                </TouchableOpacity>
               </View>
-            </View>
-          </Card>
-        ))}
+            </Card>
+          ))}
 
-        {filteredTransactions.length === 0 && (
-          <View style={styles.emptyState}>
-            <MaterialIcons name="receipt-long" size={64} color={Colors.text.tertiary} />
-            <ThemedText style={styles.emptyTitle}>No transactions found</ThemedText>
-            <ThemedText style={styles.emptyText}>
-              {searchQuery || filter !== 'all' 
-                ? 'Try adjusting your filters' 
-                : 'Add your first transaction to get started'}
-            </ThemedText>
-            {!searchQuery && filter === 'all' && (
-              <Link href="/transactions/add" asChild>
-                <TouchableOpacity style={styles.emptyButton}>
+          {filteredTransactions.length === 0 && (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="receipt-long" size={64} color={Colors.text.tertiary} />
+              <ThemedText style={styles.emptyTitle}>No transactions found</ThemedText>
+              <ThemedText style={styles.emptyText}>
+                {searchQuery || filter !== 'all' 
+                  ? 'Try adjusting your filters' 
+                  : 'Add your first transaction to get started'}
+              </ThemedText>
+              {!searchQuery && filter === 'all' && (
+                <TouchableOpacity 
+                  style={styles.emptyButton}
+                  onPress={() => router.push('/transactions/add')}
+                >
                   <ThemedText style={styles.emptyButtonText}>Add Transaction</ThemedText>
                 </TouchableOpacity>
-              </Link>
-            )}
-          </View>
-        )}
-      </ScrollView>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -261,6 +347,16 @@ const styles = StyleSheet.create({
   filterButtonTextActive: {
     color: Colors.text.inverse,
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing['3xl'],
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    color: Colors.text.secondary,
+  },
   list: {
     flex: 1,
     paddingHorizontal: Spacing.lg,
@@ -272,6 +368,22 @@ const styles = StyleSheet.create({
   },
   transactionContent: {
     flexDirection: 'row',
+  },
+  transactionActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray[200],
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: Colors.gray[50],
   },
   categoryIndicator: {
     width: 4,

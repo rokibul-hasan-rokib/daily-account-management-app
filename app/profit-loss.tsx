@@ -1,41 +1,63 @@
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
 import { MenuButton } from '@/components/menu-button';
-import { dummyTransactions, getTotalExpenses, getTotalIncome } from '@/data/dummy-data';
-import { formatCurrency, getCategoryColor, getCategoryLabel, getPeriodDates } from '@/utils/helpers';
+import { formatCurrency, getPeriodDates } from '@/utils/helpers';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { AnalyticsService } from '@/services/api';
+import { ProfitLossResponse } from '@/services/api/types';
+
+// Helper to format date to YYYY-MM-DD
+const formatDateForAPI = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function ProfitLossScreen() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
+  const [profitLossData, setProfitLossData] = useState<ProfitLossResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const { start, end } = getPeriodDates(period);
-  const transactions = dummyTransactions.filter(t => t.date >= start && t.date <= end);
-  
-  const totalIncome = getTotalIncome(transactions);
-  const totalExpenses = getTotalExpenses(transactions);
-  const profitLoss = totalIncome - totalExpenses;
 
-  // Group by category
-  const incomeByCategory: Record<string, number> = {};
-  const expensesByCategory: Record<string, number> = {};
-
-  transactions.forEach(t => {
-    if (t.type === 'income') {
-      incomeByCategory[t.category] = (incomeByCategory[t.category] || 0) + t.amount;
-    } else {
-      expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
+  const loadProfitLossData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const params = {
+        range: period,
+      };
+      
+      const data = await AnalyticsService.getProfitLoss(params);
+      setProfitLossData(data);
+    } catch (error: any) {
+      console.error('Error loading profit & loss data:', error);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  }, [period]);
 
-  const incomeCategories = Object.entries(incomeByCategory)
-    .sort((a, b) => b[1] - a[1]);
-  
-  const expenseCategories = Object.entries(expensesByCategory)
-    .sort((a, b) => b[1] - a[1]);
+  useEffect(() => {
+    loadProfitLossData();
+  }, [loadProfitLossData]);
+
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadProfitLossData();
+    }, [loadProfitLossData])
+  );
+
+  const totalIncome = profitLossData ? parseFloat(profitLossData.total_income) : 0;
+  const totalExpenses = profitLossData ? parseFloat(profitLossData.total_expense) : 0;
+  const netProfit = profitLossData ? parseFloat(profitLossData.net_profit) : 0;
+  const incomeByCategory = profitLossData?.income_by_category || [];
+  const expenseByCategory = profitLossData?.expense_by_category || [];
+  const monthlyData = profitLossData?.monthly_data || [];
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -85,121 +107,188 @@ export default function ProfitLossScreen() {
         ))}
       </View>
 
-      {/* Summary Card */}
-      <Card variant="elevated" style={styles.summaryCard}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryLabelContainer}>
-            <MaterialIcons name="trending-up" size={20} color={Colors.success.main} />
-            <ThemedText style={styles.summaryLabel}>Total Income</ThemedText>
-          </View>
-          <ThemedText style={[styles.summaryValue, styles.incomeValue]}>
-            {formatCurrency(totalIncome)}
-          </ThemedText>
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading profit & loss data...</ThemedText>
         </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryLabelContainer}>
-            <MaterialIcons name="trending-down" size={20} color={Colors.error.main} />
-            <ThemedText style={styles.summaryLabel}>Total Expenses</ThemedText>
-          </View>
-          <ThemedText style={[styles.summaryValue, styles.expenseValue]}>
-            {formatCurrency(totalExpenses)}
-          </ThemedText>
-        </View>
-
-        <View style={[styles.divider, styles.dividerThick]} />
-
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryLabelContainer}>
-            <MaterialIcons 
-              name={profitLoss >= 0 ? "check-circle" : "cancel"} 
-              size={24} 
-              color={profitLoss >= 0 ? Colors.success.main : Colors.error.main} 
-            />
-            <ThemedText style={[styles.summaryLabel, styles.profitLabel]}>
-              Net Profit / Loss
-            </ThemedText>
-          </View>
-          <ThemedText style={[
-            styles.summaryValue,
-            styles.profitValue,
-            profitLoss >= 0 ? styles.profitPositive : styles.profitNegative
-          ]}>
-            {formatCurrency(profitLoss)}
-          </ThemedText>
-        </View>
-      </Card>
-
-      {/* Income Breakdown */}
-      {incomeCategories.length > 0 && (
-        <Card variant="elevated" style={styles.section}>
-          <View style={styles.sectionTitleContainer}>
-            <MaterialIcons name="account-balance-wallet" size={20} color={Colors.success.main} />
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Income Breakdown
-            </ThemedText>
-          </View>
-          <View style={styles.categoriesList}>
-            {incomeCategories.map(([category, amount]) => (
-              <View key={category} style={styles.categoryRow}>
-                <View style={styles.categoryInfo}>
-                  <View style={[
-                    styles.categoryDot,
-                    { backgroundColor: getCategoryColor(category) }
-                  ]} />
-                  <ThemedText style={styles.categoryName}>
-                    {getCategoryLabel(category)}
-                  </ThemedText>
-                </View>
-                <View style={styles.categoryAmountContainer}>
-                  <ThemedText style={styles.categoryAmount}>
-                    {formatCurrency(amount)}
-                  </ThemedText>
-                  <ThemedText style={styles.categoryPercentage}>
-                    {((amount / totalIncome) * 100).toFixed(0)}%
-                  </ThemedText>
-                </View>
+      ) : (
+        <>
+          {/* Summary Card */}
+          <Card variant="elevated" style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryLabelContainer}>
+                <MaterialIcons name="trending-up" size={20} color={Colors.success.main} />
+                <ThemedText style={styles.summaryLabel}>Total Income</ThemedText>
               </View>
-            ))}
-          </View>
-        </Card>
-      )}
+              <ThemedText style={[styles.summaryValue, styles.incomeValue]}>
+                {formatCurrency(totalIncome)}
+              </ThemedText>
+            </View>
 
-      {/* Expenses Breakdown */}
-      {expenseCategories.length > 0 && (
-        <Card variant="elevated" style={styles.section}>
-          <View style={styles.sectionTitleContainer}>
-            <MaterialIcons name="shopping-cart" size={20} color={Colors.error.main} />
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Expenses Breakdown
-            </ThemedText>
-          </View>
-          <View style={styles.categoriesList}>
-            {expenseCategories.map(([category, amount]) => (
-              <View key={category} style={styles.categoryRow}>
-                <View style={styles.categoryInfo}>
-                  <View style={[
-                    styles.categoryDot,
-                    { backgroundColor: getCategoryColor(category) }
-                  ]} />
-                  <ThemedText style={styles.categoryName}>
-                    {getCategoryLabel(category)}
-                  </ThemedText>
-                </View>
-                <View style={styles.categoryAmountContainer}>
-                  <ThemedText style={styles.categoryAmount}>
-                    {formatCurrency(amount)}
-                  </ThemedText>
-                  <ThemedText style={styles.categoryPercentage}>
-                    {((amount / totalExpenses) * 100).toFixed(0)}%
-                  </ThemedText>
-                </View>
+            <View style={styles.divider} />
+
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryLabelContainer}>
+                <MaterialIcons name="trending-down" size={20} color={Colors.error.main} />
+                <ThemedText style={styles.summaryLabel}>Total Expenses</ThemedText>
               </View>
-            ))}
-          </View>
-        </Card>
+              <ThemedText style={[styles.summaryValue, styles.expenseValue]}>
+                {formatCurrency(totalExpenses)}
+              </ThemedText>
+            </View>
+
+            <View style={[styles.divider, styles.dividerThick]} />
+
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryLabelContainer}>
+                <MaterialIcons 
+                  name={netProfit >= 0 ? "check-circle" : "cancel"} 
+                  size={24} 
+                  color={netProfit >= 0 ? Colors.success.main : Colors.error.main} 
+                />
+                <ThemedText style={[styles.summaryLabel, styles.profitLabel]}>
+                  Net Profit / Loss
+                </ThemedText>
+              </View>
+              <ThemedText style={[
+                styles.summaryValue,
+                styles.profitValue,
+                netProfit >= 0 ? styles.profitPositive : styles.profitNegative
+              ]}>
+                {formatCurrency(netProfit)}
+              </ThemedText>
+            </View>
+          </Card>
+
+          {/* Income Breakdown */}
+          {incomeByCategory.length > 0 && (
+            <Card variant="elevated" style={styles.section}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="account-balance-wallet" size={20} color={Colors.success.main} />
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Income Breakdown
+                </ThemedText>
+              </View>
+              <View style={styles.categoriesList}>
+                {incomeByCategory.map((item, index) => {
+                  const amount = parseFloat(item.total);
+                  return (
+                    <View key={index} style={styles.categoryRow}>
+                      <View style={styles.categoryInfo}>
+                        <View style={[
+                          styles.categoryDot,
+                          { backgroundColor: Colors.success.main }
+                        ]} />
+                        <ThemedText style={styles.categoryName}>
+                          {item.category__name}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.categoryAmountContainer}>
+                        <ThemedText style={styles.categoryAmount}>
+                          {formatCurrency(amount)}
+                        </ThemedText>
+                        {totalIncome > 0 && (
+                          <ThemedText style={styles.categoryPercentage}>
+                            {((amount / totalIncome) * 100).toFixed(0)}%
+                          </ThemedText>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          )}
+
+          {/* Expenses Breakdown */}
+          {expenseByCategory.length > 0 && (
+            <Card variant="elevated" style={styles.section}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="shopping-cart" size={20} color={Colors.error.main} />
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Expenses Breakdown
+                </ThemedText>
+              </View>
+              <View style={styles.categoriesList}>
+                {expenseByCategory.map((item, index) => {
+                  const amount = parseFloat(item.total);
+                  return (
+                    <View key={index} style={styles.categoryRow}>
+                      <View style={styles.categoryInfo}>
+                        <View style={[
+                          styles.categoryDot,
+                          { backgroundColor: Colors.error.main }
+                        ]} />
+                        <ThemedText style={styles.categoryName}>
+                          {item.category__name}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.categoryAmountContainer}>
+                        <ThemedText style={styles.categoryAmount}>
+                          {formatCurrency(amount)}
+                        </ThemedText>
+                        {totalExpenses > 0 && (
+                          <ThemedText style={styles.categoryPercentage}>
+                            {((amount / totalExpenses) * 100).toFixed(0)}%
+                          </ThemedText>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          )}
+
+          {/* Monthly Data */}
+          {monthlyData.length > 0 && (
+            <Card variant="elevated" style={styles.section}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="calendar-today" size={20} color={Colors.primary[600]} />
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Monthly Trend
+                </ThemedText>
+              </View>
+              <View style={styles.monthlyList}>
+                {monthlyData.map((month, index) => {
+                  const income = typeof month.income === 'string' ? parseFloat(month.income) : month.income;
+                  const expense = typeof month.expense === 'string' ? parseFloat(month.expense) : month.expense;
+                  const profit = typeof month.profit === 'string' ? parseFloat(month.profit) : month.profit;
+                  return (
+                    <View key={index} style={styles.monthlyRow}>
+                      <ThemedText style={styles.monthLabel}>{month.month}</ThemedText>
+                      <View style={styles.monthlyAmounts}>
+                        <View style={styles.monthlyItem}>
+                          <ThemedText style={styles.monthlyLabel}>Income</ThemedText>
+                          <ThemedText style={[styles.monthlyValue, { color: Colors.success.main }]}>
+                            {formatCurrency(income)}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.monthlyItem}>
+                          <ThemedText style={styles.monthlyLabel}>Expense</ThemedText>
+                          <ThemedText style={[styles.monthlyValue, { color: Colors.error.main }]}>
+                            {formatCurrency(expense)}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.monthlyItem}>
+                          <ThemedText style={styles.monthlyLabel}>Profit</ThemedText>
+                          <ThemedText style={[
+                            styles.monthlyValue,
+                            { color: profit >= 0 ? Colors.success.main : Colors.error.main }
+                          ]}>
+                            {formatCurrency(profit)}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -278,6 +367,15 @@ const styles = StyleSheet.create({
   },
   periodButtonTextActive: {
     color: Colors.text.inverse,
+  },
+  loadingContainer: {
+    padding: Spacing['3xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    color: Colors.text.secondary,
   },
   summaryCard: {
     marginHorizontal: Spacing.lg,
@@ -389,5 +487,37 @@ const styles = StyleSheet.create({
   categoryPercentage: {
     fontSize: Typography.fontSize.xs,
     color: Colors.text.secondary,
+  },
+  monthlyList: {
+    gap: Spacing.md,
+  },
+  monthlyRow: {
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
+  },
+  monthLabel: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.sm,
+  },
+  monthlyAmounts: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: Spacing.sm,
+  },
+  monthlyItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  monthlyLabel: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.xs,
+  },
+  monthlyValue: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
   },
 });

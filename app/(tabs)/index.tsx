@@ -1,59 +1,79 @@
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { MenuButton } from '@/components/menu-button';
 import { DateRangePicker } from '@/components/date-range-picker';
-import {
-  dummyTransactions,
-  getTotalExpenses,
-  getTotalIncome,
-  getUpcomingLiabilities
-} from '@/data/dummy-data';
-import { formatCurrency, generateInsights, getPeriodDates } from '@/utils/helpers';
+import { formatCurrency, getPeriodDates } from '@/utils/helpers';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { Link } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { AnalyticsService } from '@/services/api';
+import { DashboardSummary } from '@/services/api/types';
+
+// Helper to format date to YYYY-MM-DD
+const formatDateForAPI = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function DashboardScreen() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'custom'>('month');
   const [customDateRange, setCustomDateRange] = useState<{ start: Date; end: Date } | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Calculate current period data
+  // Calculate current period dates
   const { start, end } = period === 'custom' && customDateRange
     ? customDateRange
     : getPeriodDates(period as 'today' | 'week' | 'month');
-    
-  const currentTransactions = dummyTransactions.filter(
-    t => t.date >= start && t.date <= end
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const params: any = {
+        range: period === 'custom' ? 'custom' : period,
+      };
+      
+      if (period === 'custom' && customDateRange) {
+        params.start_date = formatDateForAPI(customDateRange.start);
+        params.end_date = formatDateForAPI(customDateRange.end);
+      }
+      
+      const data = await AnalyticsService.getDashboardSummary(params);
+      setDashboardData(data);
+    } catch (error: any) {
+      console.error('Error loading dashboard data:', error);
+      // Keep existing data on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [period, customDateRange]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [loadDashboardData])
   );
-  
-  const totalIncome = getTotalIncome(currentTransactions);
-  const totalExpenses = getTotalExpenses(currentTransactions);
-  const balance = totalIncome - totalExpenses;
-  const profitLoss = totalIncome - totalExpenses;
-  
-  // Calculate previous period for comparison
-  const prevStart = new Date(start);
-  const prevEnd = new Date(start);
-  const periodLength = end.getTime() - start.getTime();
-  prevStart.setTime(start.getTime() - periodLength);
-  
-  const previousTransactions = dummyTransactions.filter(
-    t => t.date >= prevStart && t.date < start
-  );
-  
-  const insights = generateInsights(currentTransactions, previousTransactions);
-  const upcomingBills = getUpcomingLiabilities();
   
   const handleCustomDateRange = (startDate: Date, endDate: Date) => {
     setCustomDateRange({ start: startDate, end: endDate });
     setPeriod('custom');
   };
+
+  const totalIncome = dashboardData ? parseFloat(dashboardData.income) : 0;
+  const totalExpenses = dashboardData ? parseFloat(dashboardData.expenses) : 0;
+  const balance = dashboardData ? parseFloat(dashboardData.balance) : 0;
+  const totalBalance = dashboardData ? parseFloat(dashboardData.total_balance) : 0;
+  const totalBillsDue = dashboardData ? parseFloat(dashboardData.total_bills_due) : 0;
   
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -109,132 +129,110 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Main Metrics Grid */}
-      <View style={styles.metricsGrid}>
-        <Card variant="elevated" style={styles.metricCard}>
-          <View style={styles.metricHeader}>
-            <View style={[styles.metricIconContainer, { backgroundColor: Colors.success.light }]}>
-              <MaterialIcons name="trending-up" size={24} color={Colors.success.main} />
-            </View>
-            <ThemedText style={styles.metricLabel}>Money In</ThemedText>
-          </View>
-          <ThemedText style={[styles.metricValue, { color: Colors.success.main }]}>
-            {formatCurrency(totalIncome)}
-          </ThemedText>
-        </Card>
-        
-        <Card variant="elevated" style={styles.metricCard}>
-          <View style={styles.metricHeader}>
-            <View style={[styles.metricIconContainer, { backgroundColor: Colors.error.light }]}>
-              <MaterialIcons name="trending-down" size={24} color={Colors.error.main} />
-            </View>
-            <ThemedText style={styles.metricLabel}>Money Out</ThemedText>
-          </View>
-          <ThemedText style={[styles.metricValue, { color: Colors.error.main }]}>
-            {formatCurrency(totalExpenses)}
-          </ThemedText>
-        </Card>
-        
-        <Card variant="elevated" style={styles.metricCard}>
-          <View style={styles.metricHeader}>
-            <View style={[styles.metricIconContainer, { backgroundColor: Colors.info.light }]}>
-              <MaterialIcons name="account-balance-wallet" size={24} color={Colors.info.main} />
-            </View>
-            <ThemedText style={styles.metricLabel}>Balance</ThemedText>
-          </View>
-          <ThemedText style={[
-            styles.metricValue,
-            balance >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
-          ]}>
-            {formatCurrency(balance)}
-          </ThemedText>
-        </Card>
-        
-        <Card variant="elevated" style={styles.metricCard}>
-          <View style={styles.metricHeader}>
-            <View style={[styles.metricIconContainer, { backgroundColor: Colors.primary[100] }]}>
-              <MaterialIcons name="assessment" size={24} color={Colors.primary[600]} />
-            </View>
-            <ThemedText style={styles.metricLabel}>Profit/Loss</ThemedText>
-          </View>
-          <ThemedText style={[
-            styles.metricValue,
-            profitLoss >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
-          ]}>
-            {formatCurrency(profitLoss)}
-          </ThemedText>
-        </Card>
-      </View>
-
-      {/* Upcoming Bills */}
-      {upcomingBills.length > 0 && (
-        <Card variant="elevated" style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <MaterialIcons name="event" size={20} color={Colors.primary[600]} />
-              <ThemedText type="subtitle" style={styles.sectionTitle}>
-                Upcoming Bills
-              </ThemedText>
-            </View>
-            <Link href="/bills" asChild>
-              <TouchableOpacity>
-                <ThemedText style={styles.seeAllLink}>View All</ThemedText>
-              </TouchableOpacity>
-            </Link>
-          </View>
-          <View style={styles.billsList}>
-            {upcomingBills.slice(0, 3).map((bill, index) => (
-              <View key={bill.id} style={styles.billItem}>
-                <View style={styles.billInfo}>
-                  <ThemedText style={styles.billName}>{bill.name}</ThemedText>
-                  <View style={styles.billMeta}>
-                    <MaterialIcons name="calendar-today" size={14} color={Colors.text.secondary} />
-                    <ThemedText style={styles.billDue}>
-                      Due {bill.dueDate.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
-                    </ThemedText>
-                  </View>
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading dashboard...</ThemedText>
+        </View>
+      ) : (
+        <>
+          {/* Main Metrics Grid */}
+          <View style={styles.metricsGrid}>
+            <Card variant="elevated" style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <View style={[styles.metricIconContainer, { backgroundColor: Colors.success.light }]}>
+                  <MaterialIcons name="trending-up" size={24} color={Colors.success.main} />
                 </View>
-                <ThemedText style={styles.billAmount}>{formatCurrency(bill.amount)}</ThemedText>
+                <ThemedText style={styles.metricLabel}>Money In</ThemedText>
               </View>
-            ))}
+              <ThemedText style={[styles.metricValue, { color: Colors.success.main }]}>
+                {formatCurrency(totalIncome)}
+              </ThemedText>
+            </Card>
+            
+            <Card variant="elevated" style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <View style={[styles.metricIconContainer, { backgroundColor: Colors.error.light }]}>
+                  <MaterialIcons name="trending-down" size={24} color={Colors.error.main} />
+                </View>
+                <ThemedText style={styles.metricLabel}>Money Out</ThemedText>
+              </View>
+              <ThemedText style={[styles.metricValue, { color: Colors.error.main }]}>
+                {formatCurrency(totalExpenses)}
+              </ThemedText>
+            </Card>
+            
+            <Card variant="elevated" style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <View style={[styles.metricIconContainer, { backgroundColor: Colors.info.light }]}>
+                  <MaterialIcons name="account-balance-wallet" size={24} color={Colors.info.main} />
+                </View>
+                <ThemedText style={styles.metricLabel}>Balance</ThemedText>
+              </View>
+              <ThemedText style={[
+                styles.metricValue,
+                balance >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
+              ]}>
+                {formatCurrency(balance)}
+              </ThemedText>
+            </Card>
+            
+            <Card variant="elevated" style={styles.metricCard}>
+              <View style={styles.metricHeader}>
+                <View style={[styles.metricIconContainer, { backgroundColor: Colors.primary[100] }]}>
+                  <MaterialIcons name="assessment" size={24} color={Colors.primary[600]} />
+                </View>
+                <ThemedText style={styles.metricLabel}>Total Balance</ThemedText>
+              </View>
+              <ThemedText style={[
+                styles.metricValue,
+                totalBalance >= 0 ? { color: Colors.success.main } : { color: Colors.error.main }
+              ]}>
+                {formatCurrency(totalBalance)}
+              </ThemedText>
+            </Card>
           </View>
-        </Card>
-      )}
 
-      {/* Insights */}
-      {insights.length > 0 && (
-        <Card variant="elevated" style={styles.section}>
-          <View style={styles.sectionTitleContainer}>
-            <MaterialIcons name="lightbulb" size={20} color={Colors.warning.main} />
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Insights
-            </ThemedText>
-          </View>
-          <View style={styles.insightsList}>
-            {insights.map((insight, index) => (
-              <View key={index} style={styles.insightItem}>
-                <View style={styles.insightDot} />
-                <ThemedText style={styles.insightText}>{insight}</ThemedText>
+          {/* Bills Due */}
+          {totalBillsDue > 0 && (
+            <Card variant="elevated" style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <MaterialIcons name="event" size={20} color={Colors.warning.main} />
+                  <ThemedText type="subtitle" style={styles.sectionTitle}>
+                    Bills Due
+                  </ThemedText>
+                </View>
+                <TouchableOpacity onPress={() => router.push('/bills')}>
+                  <ThemedText style={styles.seeAllLink}>View All</ThemedText>
+                </TouchableOpacity>
               </View>
-            ))}
-          </View>
-        </Card>
+              <View style={styles.billsSummary}>
+                <ThemedText style={styles.billsAmount}>{formatCurrency(totalBillsDue)}</ThemedText>
+                <ThemedText style={styles.billsText}>Total bills due</ThemedText>
+              </View>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <Link href="/transactions/add" asChild>
-          <TouchableOpacity style={styles.primaryAction}>
-            <MaterialIcons name="add-circle" size={24} color={Colors.text.inverse} />
-            <ThemedText style={styles.primaryActionText}>Add Transaction</ThemedText>
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity 
+          style={styles.primaryAction}
+          onPress={() => router.push('/transactions/add')}
+        >
+          <MaterialIcons name="add-circle" size={24} color={Colors.text.inverse} />
+          <ThemedText style={styles.primaryActionText}>Add Transaction</ThemedText>
+        </TouchableOpacity>
         
-        <Link href="/transactions" asChild>
-          <TouchableOpacity style={styles.secondaryAction}>
-            <ThemedText style={styles.secondaryActionText}>View All Transactions</ThemedText>
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity 
+          style={styles.secondaryAction}
+          onPress={() => router.push('/transactions')}
+        >
+          <ThemedText style={styles.secondaryActionText}>View All Transactions</ThemedText>
+        </TouchableOpacity>
       </View>
 
       {/* Date Range Picker Modal */}
@@ -296,6 +294,15 @@ const styles = StyleSheet.create({
   },
   periodButtonTextActive: {
     color: Colors.text.inverse,
+  },
+  loadingContainer: {
+    padding: Spacing['3xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    color: Colors.text.secondary,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -390,6 +397,20 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.bold,
     color: Colors.error.main,
+  },
+  billsSummary: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  billsAmount: {
+    fontSize: Typography.fontSize['3xl'],
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.warning.main,
+    marginBottom: Spacing.xs,
+  },
+  billsText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
   },
   insightsList: {
     gap: Spacing.md,
