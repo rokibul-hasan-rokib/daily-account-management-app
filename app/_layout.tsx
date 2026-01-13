@@ -11,6 +11,7 @@ import { MerchantsProvider } from '@/contexts/merchants-context';
 import { TransactionsProvider } from '@/contexts/transactions-context';
 import { ReceiptsProvider } from '@/contexts/receipts-context';
 import { LiabilitiesProvider } from '@/contexts/liabilities-context';
+import { RulesProvider } from '@/contexts/rules-context';
 import { DrawerSidebar } from '@/components/drawer-sidebar';
 
 export const unstable_settings = {
@@ -27,7 +28,8 @@ export default function RootLayout() {
           <TransactionsProvider>
             <ReceiptsProvider>
               <LiabilitiesProvider>
-                <DrawerProvider>
+                <RulesProvider>
+                  <DrawerProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <Stack>
               <Stack.Screen name="splash" options={{ headerShown: false }} />
@@ -40,6 +42,7 @@ export default function RootLayout() {
             <StatusBar style="light" />
           </ThemeProvider>
         </DrawerProvider>
+                </RulesProvider>
               </LiabilitiesProvider>
             </ReceiptsProvider>
         </TransactionsProvider>

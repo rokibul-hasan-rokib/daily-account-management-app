@@ -1,57 +1,50 @@
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { MenuButton } from '@/components/menu-button';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, Switch } from 'react-native';
+import { useState, useMemo, useCallback } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text, ActivityIndicator, Alert } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-interface Rule {
-  id: string;
-  name: string;
-  merchantPattern: string;
-  category: string;
-  enabled: boolean;
-  transactionCount: number;
-}
-
-const dummyRules: Rule[] = [
-  { id: '1', name: 'Tesco Auto-Categorize', merchantPattern: 'Tesco', category: 'Groceries', enabled: true, transactionCount: 25 },
-  { id: '2', name: 'Uber Transport Rule', merchantPattern: 'Uber', category: 'Transport', enabled: true, transactionCount: 32 },
-  { id: '3', name: 'Amazon Shopping', merchantPattern: 'Amazon', category: 'Shopping', enabled: false, transactionCount: 18 },
-];
-
-const categoryOptions = [
-  { label: 'Groceries', value: 'groceries' },
-  { label: 'Transport', value: 'transport' },
-  { label: 'Utilities', value: 'utilities' },
-  { label: 'Shopping', value: 'shopping' },
-  { label: 'Food & Drink', value: 'food-drink' },
-];
+import { useRules } from '@/contexts/rules-context';
+import { router, useFocusEffect } from 'expo-router';
+import { CategoryRule } from '@/services/api/types';
 
 export default function RulesScreen() {
-  const [rules] = useState<Rule[]>(dummyRules);
-  const [isAdding, setIsAdding] = useState(false);
-  const [newRuleName, setNewRuleName] = useState('');
-  const [newRulePattern, setNewRulePattern] = useState('');
-  const [newRuleCategory, setNewRuleCategory] = useState('');
+  const { rules, isLoading, deleteRule, refreshRules } = useRules();
 
-  const toggleRule = (id: string) => {
-    console.log('Toggling rule:', id);
-  };
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refreshRules({ ordering: 'priority' });
+    }, [refreshRules])
+  );
 
-  const handleAddRule = () => {
-    if (newRuleName.trim() && newRulePattern.trim() && newRuleCategory) {
-      console.log('Adding rule:', { name: newRuleName, pattern: newRulePattern, category: newRuleCategory });
-      setNewRuleName('');
-      setNewRulePattern('');
-      setNewRuleCategory('');
-      setIsAdding(false);
-    }
+  // Sort rules by priority (higher priority first)
+  const sortedRules = useMemo(() => {
+    return [...rules].sort((a, b) => b.priority - a.priority);
+  }, [rules]);
+
+  const handleDelete = async (id: number) => {
+    Alert.alert(
+      'Delete Rule',
+      'Are you sure you want to delete this rule?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRule(id);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete rule.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -69,9 +62,9 @@ export default function RulesScreen() {
         </View>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setIsAdding(!isAdding)}
+          onPress={() => router.push('/rules/add')}
         >
-          <MaterialIcons name={isAdding ? "close" : "add"} size={24} color={Colors.text.inverse} />
+          <MaterialIcons name="add" size={24} color={Colors.text.inverse} />
         </TouchableOpacity>
       </View>
 
@@ -85,64 +78,81 @@ export default function RulesScreen() {
         </View>
       </Card>
 
-      {/* Add Rule Form */}
-      {isAdding && (
-        <Card variant="elevated" style={styles.addFormCard}>
-          <ThemedText type="subtitle" style={styles.formTitle}>Create New Rule</ThemedText>
-          <Input
-            label="Rule Name"
-            placeholder="e.g., Tesco Auto-Categorize"
-            value={newRuleName}
-            onChangeText={setNewRuleName}
-          />
-          <Input
-            label="Merchant Pattern"
-            placeholder="e.g., Tesco, Uber, Amazon"
-            value={newRulePattern}
-            onChangeText={setNewRulePattern}
-          />
-          <Select
-            label="Category"
-            options={categoryOptions}
-            value={newRuleCategory}
-            onValueChange={setNewRuleCategory}
-            placeholder="Select category"
-          />
-          <Button
-            title="Create Rule"
-            variant="primary"
-            onPress={handleAddRule}
-            style={styles.addFormButton}
-          />
-        </Card>
-      )}
-
       {/* Rules List */}
       <View style={styles.rulesList}>
-        {rules.map((rule) => (
-          <Card key={rule.id} variant="elevated" style={styles.ruleCard}>
-            <View style={styles.ruleHeader}>
-              <View style={styles.ruleInfo}>
-                <ThemedText style={styles.ruleName}>{rule.name}</ThemedText>
-                <View style={styles.ruleMeta}>
-                  <Text style={styles.rulePattern}>Pattern: "{rule.merchantPattern}"</Text>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary[500]} />
+            <ThemedText style={styles.loadingText}>Loading rules...</ThemedText>
+          </View>
+        ) : (
+          <>
+            {sortedRules.map((rule) => (
+              <Card key={rule.id} variant="elevated" style={styles.ruleCard}>
+                <View style={styles.ruleHeader}>
+                  <TouchableOpacity
+                    style={styles.ruleInfo}
+                    onPress={() => router.push(`/rules/add?id=${rule.id}`)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.ruleTitleRow}>
+                      <ThemedText style={styles.ruleName}>
+                        {rule.merchant_name || `Keyword: "${rule.keyword}"`}
+                      </ThemedText>
+                      <Badge 
+                        label={`Priority: ${rule.priority}`} 
+                        variant="default" 
+                        size="sm" 
+                      />
+                    </View>
+                    <View style={styles.ruleMeta}>
+                      {rule.merchant_name && (
+                        <View style={styles.ruleMetaItem}>
+                          <MaterialIcons name="store" size={14} color={Colors.text.secondary} />
+                          <Text style={styles.rulePattern}>{rule.merchant_name}</Text>
+                        </View>
+                      )}
+                      {rule.keyword && (
+                        <View style={styles.ruleMetaItem}>
+                          <MaterialIcons name="search" size={14} color={Colors.text.secondary} />
+                          <Text style={styles.rulePattern}>"{rule.keyword}"</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(rule.id)}
+                    style={styles.deleteButton}
+                  >
+                    <MaterialIcons name="delete-outline" size={20} color={Colors.error.main} />
+                  </TouchableOpacity>
                 </View>
+                <View style={styles.ruleFooter}>
+                  <Badge 
+                    label={rule.category_name || 'Uncategorized'} 
+                    variant="info" 
+                    size="sm" 
+                  />
+                  {rule.times_applied !== undefined && (
+                    <Text style={styles.ruleCount}>
+                      {rule.times_applied} time{rule.times_applied !== 1 ? 's' : ''} applied
+                    </Text>
+                  )}
+                </View>
+              </Card>
+            ))}
+
+            {sortedRules.length === 0 && !isLoading && (
+              <View style={styles.emptyState}>
+                <MaterialIcons name="rule" size={64} color={Colors.text.tertiary} />
+                <ThemedText style={styles.emptyTitle}>No rules found</ThemedText>
+                <ThemedText style={styles.emptyText}>
+                  Create your first rule to automate transaction categorization
+                </ThemedText>
               </View>
-              <Switch
-                value={rule.enabled}
-                onValueChange={() => toggleRule(rule.id)}
-                trackColor={{ false: Colors.gray[300], true: Colors.primary[500] }}
-                thumbColor={Colors.background.light}
-              />
-            </View>
-            <View style={styles.ruleFooter}>
-              <Badge label={rule.category} variant="info" size="sm" />
-              <Text style={styles.ruleCount}>
-                {rule.transactionCount} transaction{rule.transactionCount !== 1 ? 's' : ''} matched
-              </Text>
-            </View>
-          </Card>
-        ))}
+            )}
+          </>
+        )}
       </View>
     </ScrollView>
   );
@@ -236,19 +246,36 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: Spacing.md,
   },
+  ruleTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+    gap: Spacing.sm,
+  },
   ruleName: {
     fontSize: Typography.fontSize.base,
     fontWeight: Typography.fontWeight.semibold,
     color: Colors.text.primary,
-    marginBottom: Spacing.xs,
+    flex: 1,
   },
   ruleMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.md,
+    flexWrap: 'wrap',
+  },
+  ruleMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
   },
   rulePattern: {
     fontSize: Typography.fontSize.sm,
     color: Colors.text.secondary,
+  },
+  deleteButton: {
+    padding: Spacing.xs,
   },
   ruleFooter: {
     flexDirection: 'row',
@@ -258,5 +285,34 @@ const styles = StyleSheet.create({
   ruleCount: {
     fontSize: Typography.fontSize.xs,
     color: Colors.text.tertiary,
+  },
+  loadingContainer: {
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing['3xl'],
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  emptyText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
+    textAlign: 'center',
   },
 });
