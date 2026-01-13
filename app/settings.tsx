@@ -361,25 +361,39 @@ export default function SettingsScreen() {
       <Card variant="elevated" style={styles.section}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>Data Management</ThemedText>
         <View style={styles.settingsList}>
-          {actionSettings.map((setting) => (
-            <TouchableOpacity
-              key={setting.id}
-              style={styles.settingItem}
-              onPress={() => handleAction(setting.id, setting.title)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingLeft}>
-                <View style={styles.settingIcon}>
-                  <MaterialIcons name={setting.icon as any} size={24} color={Colors.primary[600]} />
-                </View>
-                <View style={styles.settingInfo}>
-                  <ThemedText style={styles.settingTitle}>{setting.title}</ThemedText>
-                  <ThemedText style={styles.settingDescription}>{setting.description}</ThemedText>
-                </View>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => handleAction('export', 'Export Data')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingLeft}>
+              <View style={styles.settingIcon}>
+                <MaterialIcons name="download" size={24} color={Colors.primary[600]} />
               </View>
-              <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
-            </TouchableOpacity>
-          ))}
+              <View style={styles.settingInfo}>
+                <ThemedText style={styles.settingTitle}>Export Data</ThemedText>
+                <ThemedText style={styles.settingDescription}>Download all your data</ThemedText>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => handleAction('import', 'Import Data')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingLeft}>
+              <View style={styles.settingIcon}>
+                <MaterialIcons name="upload" size={24} color={Colors.primary[600]} />
+              </View>
+              <View style={styles.settingInfo}>
+                <ThemedText style={styles.settingTitle}>Import Data</ThemedText>
+                <ThemedText style={styles.settingDescription}>Import data from file</ThemedText>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
+          </TouchableOpacity>
         </View>
       </Card>
 
