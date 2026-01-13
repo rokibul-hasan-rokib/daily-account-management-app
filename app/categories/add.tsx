@@ -4,53 +4,87 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MenuButton } from '@/components/menu-button';
 import { Colors, Typography, Spacing, Shadows, BorderRadius } from '@/constants/design-system';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useCategories } from '@/contexts/categories-context';
 
 type CategoryType = 'income' | 'expense';
 
 const categoryIcons = [
-  { label: 'Shopping Cart', value: 'shopping-cart' },
-  { label: 'Car', value: 'directions-car' },
-  { label: 'Bolt', value: 'bolt' },
-  { label: 'Wallet', value: 'account-balance-wallet' },
-  { label: 'Work', value: 'work' },
-  { label: 'Home', value: 'home' },
-  { label: 'Restaurant', value: 'restaurant' },
-  { label: 'Local Offer', value: 'local-offer' },
-  { label: 'School', value: 'school' },
-  { label: 'Medical', value: 'medical-services' },
-  { label: 'Entertainment', value: 'movie' },
-  { label: 'Sports', value: 'sports' },
+  { label: '🚗', value: '🚗' },
+  { label: '🛒', value: '🛒' },
+  { label: '⚡', value: '⚡' },
+  { label: '💰', value: '💰' },
+  { label: '💼', value: '💼' },
+  { label: '🏠', value: '🏠' },
+  { label: '🍔', value: '🍔' },
+  { label: '🏷️', value: '🏷️' },
+  { label: '🎓', value: '🎓' },
+  { label: '🏥', value: '🏥' },
+  { label: '🎬', value: '🎬' },
+  { label: '⚽', value: '⚽' },
+  { label: '✈️', value: '✈️' },
+  { label: '🎮', value: '🎮' },
+  { label: '👕', value: '👕' },
+  { label: '🍕', value: '🍕' },
 ];
 
 const categoryColors = [
-  { label: 'Green', value: Colors.success.main },
-  { label: 'Blue', value: Colors.info.main },
-  { label: 'Orange', value: Colors.warning.main },
+  { label: 'Green', value: '#27ae60' },
+  { label: 'Blue', value: '#3498db' },
+  { label: 'Orange', value: '#f39c12' },
   { label: 'Purple', value: Colors.primary[500] },
-  { label: 'Red', value: Colors.error.main },
+  { label: 'Red', value: '#e74c3c' },
   { label: 'Teal', value: '#14b8a6' },
   { label: 'Pink', value: '#ec4899' },
   { label: 'Indigo', value: '#6366f1' },
 ];
 
 export default function AddCategoryScreen() {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<CategoryType>('expense');
-  const [icon, setIcon] = useState('local-offer');
-  const [color, setColor] = useState(Colors.primary[500]);
+  const params = useLocalSearchParams();
+  const isEditMode = !!params.id;
+  const { createCategory, updateCategory } = useCategories();
+  
+  const [name, setName] = useState(params.name?.toString() || '');
+  const [type, setType] = useState<CategoryType>((params.type as CategoryType) || 'expense');
+  const [icon, setIcon] = useState(params.icon?.toString() || '🏷️');
+  const [color, setColor] = useState(params.color?.toString() || Colors.primary[500]);
+  const [description, setDescription] = useState(params.description?.toString() || '');
+  const [loading, setLoading] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
-      alert('Please enter a category name');
+      Alert.alert('Validation Error', 'Please enter a category name');
       return;
     }
-    // In real app, this would save to backend/state
-    console.log({ name, type, icon, color });
-    router.back();
+
+    try {
+      setLoading(true);
+      const categoryData = {
+        name: name.trim(),
+        type,
+        icon: icon || undefined,
+        color: color || undefined,
+        description: description.trim() || undefined,
+      };
+
+      if (isEditMode && params.id) {
+        await updateCategory(parseInt(params.id.toString()), categoryData);
+        // Redirect to categories list after successful update
+        router.replace('/categories');
+      } else {
+        await createCategory(categoryData);
+        // Redirect to categories list after successful creation
+        router.replace('/categories');
+      }
+    } catch (error: any) {
+      console.error('Error saving category:', error);
+      Alert.alert('Error', error.message || 'Failed to save category');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isValid = name.trim().length > 0;
@@ -76,9 +110,13 @@ export default function AddCategoryScreen() {
             <MaterialIcons name="arrow-back" size={24} color={Colors.text.primary} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <ThemedText type="title" style={styles.headerTitle}>New Category</ThemedText>
+            <ThemedText type="title" style={styles.headerTitle}>
+              {isEditMode ? 'Edit Category' : 'New Category'}
+            </ThemedText>
             <ThemedText style={styles.headerSubtitle}>
-              {type === 'income' ? 'Add income category' : 'Add expense category'}
+              {isEditMode 
+                ? 'Update category details' 
+                : type === 'income' ? 'Add income category' : 'Add expense category'}
             </ThemedText>
           </View>
           <View style={styles.headerRight} />
@@ -147,11 +185,23 @@ export default function AddCategoryScreen() {
           {/* Category Name */}
           <Input
             label="Category Name *"
-            placeholder="e.g., Entertainment, Food, Travel"
+            placeholder="e.g., Transport, Groceries, Entertainment"
             value={name}
             onChangeText={setName}
             leftIcon={<MaterialIcons name="label" size={20} color={Colors.primary[500]} />}
             containerStyle={styles.inputContainer}
+          />
+
+          {/* Description */}
+          <Input
+            label="Description (Optional)"
+            placeholder="e.g., Transportation expenses"
+            value={description}
+            onChangeText={setDescription}
+            leftIcon={<MaterialIcons name="description" size={20} color={Colors.primary[500]} />}
+            containerStyle={styles.inputContainer}
+            multiline
+            numberOfLines={2}
           />
 
           {/* Icon Selection */}
@@ -168,11 +218,7 @@ export default function AddCategoryScreen() {
                   onPress={() => setIcon(item.value)}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons 
-                    name={item.value as any} 
-                    size={24} 
-                    color={icon === item.value ? Colors.text.inverse : Colors.text.secondary} 
-                  />
+                  <Text style={styles.iconEmoji}>{item.value}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -206,13 +252,20 @@ export default function AddCategoryScreen() {
             <Text style={styles.previewLabel}>Preview</Text>
             <View style={styles.previewContent}>
               <View style={[styles.previewIcon, { backgroundColor: `${color}20` }]}>
-                <MaterialIcons name={icon as any} size={24} color={color} />
+                {icon ? (
+                  <Text style={styles.previewIconEmoji}>{icon}</Text>
+                ) : (
+                  <MaterialIcons name="category" size={24} color={color} />
+                )}
               </View>
               <View style={styles.previewInfo}>
                 <Text style={styles.previewName}>{name || 'Category Name'}</Text>
                 <Text style={styles.previewType}>
                   {type === 'income' ? 'Income' : 'Expense'} Category
                 </Text>
+                {description && (
+                  <Text style={styles.previewDescription}>{description}</Text>
+                )}
               </View>
             </View>
           </Card>
@@ -224,15 +277,21 @@ export default function AddCategoryScreen() {
               variant="outline"
               onPress={() => router.back()}
               style={styles.cancelButton}
+              disabled={loading}
             />
             <Button
-              title="Save Category"
+              title={loading ? 'Saving...' : isEditMode ? 'Update Category' : 'Save Category'}
               variant="primary"
               onPress={handleSave}
-              disabled={!isValid}
-              style={[styles.saveButton, !isValid && styles.saveButtonDisabled]}
+              disabled={!isValid || loading}
+              style={[styles.saveButton, (!isValid || loading) && styles.saveButtonDisabled]}
             />
           </View>
+          {loading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={Colors.primary[500]} />
+            </View>
+          )}
 
           {/* Helper Text */}
           <Text style={styles.helperText}>
@@ -377,6 +436,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary[500],
     borderColor: Colors.primary[600],
   },
+  iconEmoji: {
+    fontSize: 24,
+  },
   colorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -423,6 +485,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  previewIconEmoji: {
+    fontSize: 28,
+  },
   previewInfo: {
     flex: 1,
   },
@@ -435,6 +500,11 @@ const styles = StyleSheet.create({
   previewType: {
     fontSize: Typography.fontSize.sm,
     color: Colors.text.secondary,
+    marginBottom: Spacing.xs,
+  },
+  previewDescription: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.text.tertiary,
   },
   actions: {
     flexDirection: 'row',
@@ -455,5 +525,15 @@ const styles = StyleSheet.create({
     color: Colors.primary[500],
     textAlign: 'center',
     marginTop: Spacing.md,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

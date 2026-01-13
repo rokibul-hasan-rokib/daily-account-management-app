@@ -1,53 +1,71 @@
+import { MenuButton } from '@/components/menu-button';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { MenuButton } from '@/components/menu-button';
-import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput } from 'react-native';
+import { Colors, Shadows, Spacing, Typography } from '@/constants/design-system';
+import { useCategories } from '@/contexts/categories-context';
+import { Category } from '@/services/api/types';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-interface Category {
-  id: string;
-  name: string;
-  type: 'income' | 'expense';
-  color: string;
-  icon: string;
-  transactionCount: number;
-}
-
-const dummyCategories: Category[] = [
-  { id: '1', name: 'Groceries', type: 'expense', color: Colors.success.main, icon: 'shopping-cart', transactionCount: 45 },
-  { id: '2', name: 'Transport', type: 'expense', color: Colors.info.main, icon: 'directions-car', transactionCount: 32 },
-  { id: '3', name: 'Utilities', type: 'expense', color: Colors.warning.main, icon: 'bolt', transactionCount: 12 },
-  { id: '4', name: 'Salary', type: 'income', color: Colors.success.main, icon: 'account-balance-wallet', transactionCount: 8 },
-  { id: '5', name: 'Freelance', type: 'income', color: Colors.primary[500], icon: 'work', transactionCount: 15 },
-  { id: '6', name: 'Rent', type: 'expense', color: Colors.error.main, icon: 'home', transactionCount: 6 },
-];
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function CategoriesScreen() {
-  const [categories] = useState<Category[]>(dummyCategories);
+  const { 
+    categories, 
+    isLoading, 
+    deleteCategory: deleteCategoryFromContext,
+    refreshCategories 
+  } = useCategories();
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
-  const [isAdding, setIsAdding] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryType, setNewCategoryType] = useState<'income' | 'expense'>('expense');
 
-  const filteredCategories = categories.filter(cat => 
-    filter === 'all' || cat.type === filter
-  );
+  const filteredCategories = useMemo(() => {
+    return categories.filter(cat => 
+      filter === 'all' || cat.type === filter
+    );
+  }, [categories, filter]);
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      // In real app, add to backend
-      console.log('Adding category:', { name: newCategoryName, type: newCategoryType });
-      setNewCategoryName('');
-      setIsAdding(false);
-    }
+  const handleDeleteCategory = async (id: number, name: string) => {
+    Alert.alert(
+      'Delete Category',
+      `Are you sure you want to delete "${name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteCategoryFromContext(id);
+              Alert.alert('Success', 'Category deleted successfully');
+            } catch (error: any) {
+              console.error('Error deleting category:', error);
+              Alert.alert('Error', error.message || 'Failed to delete category');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditCategory = (category: Category) => {
+    router.push({
+      pathname: '/categories/add',
+      params: { 
+        id: category.id.toString(),
+        name: category.name,
+        type: category.type,
+        icon: category.icon || '',
+        color: category.color || Colors.primary[500],
+        description: category.description || '',
+      },
+    });
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView 
+      style={styles.container} 
+      showsVerticalScrollIndicator={false}
+    >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -61,9 +79,9 @@ export default function CategoriesScreen() {
         </View>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setIsAdding(!isAdding)}
+          onPress={() => router.push('/categories/add')}
         >
-          <MaterialIcons name={isAdding ? "close" : "add"} size={24} color={Colors.text.inverse} />
+          <MaterialIcons name="add" size={24} color={Colors.text.inverse} />
         </TouchableOpacity>
       </View>
 
@@ -86,70 +104,85 @@ export default function CategoriesScreen() {
         ))}
       </View>
 
-      {/* Add Category Form */}
-      {isAdding && (
-        <Card variant="elevated" style={styles.addFormCard}>
-          <ThemedText type="subtitle" style={styles.formTitle}>Add New Category</ThemedText>
-          <Input
-            label="Category Name"
-            placeholder="e.g., Entertainment, Food"
-            value={newCategoryName}
-            onChangeText={setNewCategoryName}
-          />
-          <View style={styles.typeToggle}>
-            <TouchableOpacity
-              style={[styles.typeButton, newCategoryType === 'income' && styles.typeButtonActive]}
-              onPress={() => setNewCategoryType('income')}
-            >
-              <Text style={[styles.typeButtonText, newCategoryType === 'income' && styles.typeButtonTextActive]}>
-                Income
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.typeButton, newCategoryType === 'expense' && styles.typeButtonActive]}
-              onPress={() => setNewCategoryType('expense')}
-            >
-              <Text style={[styles.typeButtonText, newCategoryType === 'expense' && styles.typeButtonTextActive]}>
-                Expense
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <Button
-            title="Add Category"
-            variant="primary"
-            onPress={handleAddCategory}
-            style={styles.addFormButton}
-          />
-        </Card>
-      )}
-
-      {/* Categories List */}
-      <View style={styles.categoriesList}>
-        {filteredCategories.map((category) => (
-          <Card key={category.id} variant="elevated" style={styles.categoryCard}>
-            <View style={styles.categoryContent}>
-              <View style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}>
-                <MaterialIcons name={category.icon as any} size={24} color={category.color} />
-              </View>
-              <View style={styles.categoryInfo}>
-                <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
-                <ThemedText style={styles.categoryMeta}>
-                  {category.transactionCount} transaction{category.transactionCount !== 1 ? 's' : ''}
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading categories...</ThemedText>
+        </View>
+      ) : (
+        <>
+          {/* Categories List */}
+          <View style={styles.categoriesList}>
+            {filteredCategories.length === 0 ? (
+              <Card variant="elevated" style={styles.emptyCard}>
+                <MaterialIcons name="category" size={48} color={Colors.text.tertiary} />
+                <ThemedText style={styles.emptyText}>
+                  No categories found. Create your first category!
                 </ThemedText>
-              </View>
-              <View style={styles.categoryBadge}>
-                <Text style={[
-                  styles.categoryBadgeText,
-                  category.type === 'income' && styles.categoryBadgeIncome,
-                  category.type === 'expense' && styles.categoryBadgeExpense,
-                ]}>
-                  {category.type === 'income' ? 'Income' : 'Expense'}
-                </Text>
-              </View>
-            </View>
-          </Card>
-        ))}
-      </View>
+              </Card>
+            ) : (
+              filteredCategories.map((category) => (
+                <Card key={category.id} variant="elevated" style={styles.categoryCard}>
+                  <TouchableOpacity
+                    style={styles.categoryContent}
+                    onPress={() => handleEditCategory(category)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[
+                      styles.categoryIcon, 
+                      { backgroundColor: category.color ? `${category.color}20` : Colors.primary[100] }
+                    ]}>
+                      {category.icon ? (
+                        <Text style={styles.categoryIconEmoji}>{category.icon}</Text>
+                      ) : (
+                        <MaterialIcons 
+                          name="category" 
+                          size={24} 
+                          color={category.color || Colors.primary[500]} 
+                        />
+                      )}
+                    </View>
+                    <View style={styles.categoryInfo}>
+                      <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
+                      {category.description && (
+                        <ThemedText style={styles.categoryDescription} numberOfLines={1}>
+                          {category.description}
+                        </ThemedText>
+                      )}
+                    </View>
+                    <View style={styles.categoryBadge}>
+                      <Text style={[
+                        styles.categoryBadgeText,
+                        category.type === 'income' && styles.categoryBadgeIncome,
+                        category.type === 'expense' && styles.categoryBadgeExpense,
+                      ]}>
+                        {category.type === 'income' ? 'Income' : 'Expense'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <View style={styles.categoryActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEditCategory(category)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="edit" size={20} color={Colors.primary[600]} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleDeleteCategory(category.id, category.name)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="delete" size={20} color={Colors.error.main} />
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              ))
+            )}
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -216,42 +249,25 @@ const styles = StyleSheet.create({
   filterButtonTextActive: {
     color: Colors.text.inverse,
   },
-  addFormCard: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-    padding: Spacing.lg,
-  },
-  formTitle: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.bold,
-    marginBottom: Spacing.md,
-    color: Colors.text.primary,
-  },
-  typeToggle: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  typeButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: 12,
-    backgroundColor: Colors.gray[100],
+  loadingContainer: {
+    padding: Spacing['2xl'],
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  typeButtonActive: {
-    backgroundColor: Colors.primary[500],
-  },
-  typeButtonText: {
-    fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.semibold,
+  loadingText: {
+    marginTop: Spacing.md,
     color: Colors.text.secondary,
   },
-  typeButtonTextActive: {
-    color: Colors.text.inverse,
+  emptyCard: {
+    marginHorizontal: Spacing.lg,
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addFormButton: {
-    width: '100%',
+  emptyText: {
+    marginTop: Spacing.md,
+    textAlign: 'center',
+    color: Colors.text.secondary,
   },
   categoriesList: {
     paddingHorizontal: Spacing.lg,
@@ -260,11 +276,13 @@ const styles = StyleSheet.create({
   },
   categoryCard: {
     padding: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   categoryContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+    flex: 1,
   },
   categoryIcon: {
     width: 48,
@@ -272,6 +290,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  categoryIconEmoji: {
+    fontSize: 24,
   },
   categoryInfo: {
     flex: 1,
@@ -282,7 +303,7 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: Spacing.xs,
   },
-  categoryMeta: {
+  categoryDescription: {
     fontSize: Typography.fontSize.sm,
     color: Colors.text.secondary,
   },
@@ -302,5 +323,21 @@ const styles = StyleSheet.create({
   },
   categoryBadgeExpense: {
     color: Colors.error.main,
+  },
+  categoryActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray[200],
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: Colors.gray[50],
   },
 });
