@@ -3,127 +3,60 @@ import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MenuButton } from '@/components/menu-button';
-import { dummyReceiptItems, dummyReceipts } from '@/data/dummy-data';
 import { formatCurrency, formatDate, getPeriodDates } from '@/utils/helpers';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-interface ItemSummary {
-  itemName: string;
-  totalSpend: number;
-  totalQuantity: number;
-  averagePrice: number;
-  transactionCount: number;
-  percentageOfTotal: number;
-  trend: 'up' | 'down' | 'stable';
-  trendPercentage: number;
-  lastPurchase: Date;
-}
+import { ReceiptItemsService } from '@/services/api';
+import { ItemAnalyticsResponse } from '@/services/api/types';
 
 export default function ItemAnalyticsScreen() {
   const [period, setPeriod] = useState<'week' | 'month'>('month');
   const [searchQuery, setSearchQuery] = useState('');
+  const [analytics, setAnalytics] = useState<ItemAnalyticsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const { start, end } = getPeriodDates(period);
+  const startDate = start.toISOString().split('T')[0];
+  const endDate = end.toISOString().split('T')[0];
 
-  // Get previous period for comparison
-  const prevStart = new Date(start);
-  const prevEnd = new Date(start);
-  const periodLength = end.getTime() - start.getTime();
-  prevStart.setTime(start.getTime() - periodLength);
+  // Fetch analytics from API
+  useEffect(() => {
+    loadAnalytics();
+  }, [period, startDate, endDate, searchQuery]);
 
-  // Calculate item analytics
-  const itemAnalytics = useMemo(() => {
-    // Current period items
-    const currentReceipts = dummyReceipts.filter(r => r.date >= start && r.date <= end);
-    const currentReceiptIds = currentReceipts.map(r => r.id);
-    const currentItems = dummyReceiptItems.filter(item => currentReceiptIds.includes(item.receiptId));
-
-    // Previous period items
-    const previousReceipts = dummyReceipts.filter(r => r.date >= prevStart && r.date < start);
-    const previousReceiptIds = previousReceipts.map(r => r.id);
-    const previousItems = dummyReceiptItems.filter(item => previousReceiptIds.includes(item.receiptId));
-
-    // Group current items by name
-    const itemGroups: Record<string, {
-      totalSpend: number;
-      totalQuantity: number;
-      prices: number[];
-      dates: Date[];
-    }> = {};
-
-    currentItems.forEach(item => {
-      const name = item.itemName;
-      if (!itemGroups[name]) {
-        itemGroups[name] = {
-          totalSpend: 0,
-          totalQuantity: 0,
-          prices: [],
-          dates: [],
-        };
-      }
-      itemGroups[name].totalSpend += item.totalPrice;
-      itemGroups[name].totalQuantity += item.quantity;
-      itemGroups[name].prices.push(item.unitPrice);
-      
-      const receipt = currentReceipts.find(r => r.id === item.receiptId);
-      if (receipt) {
-        itemGroups[name].dates.push(receipt.date);
-      }
-    });
-
-    // Group previous items for trend calculation
-    const previousItemGroups: Record<string, number> = {};
-    previousItems.forEach(item => {
-      previousItemGroups[item.itemName] = 
-        (previousItemGroups[item.itemName] || 0) + item.totalPrice;
-    });
-
-    const totalSpend = Object.values(itemGroups).reduce((sum, g) => sum + g.totalSpend, 0);
-
-    // Convert to array with analytics
-    const analytics: ItemSummary[] = Object.entries(itemGroups).map(([name, data]) => {
-      const averagePrice = data.prices.reduce((sum, p) => sum + p, 0) / data.prices.length;
-      const previousSpend = previousItemGroups[name] || 0;
-      
-      let trend: 'up' | 'down' | 'stable' = 'stable';
-      let trendPercentage = 0;
-      
-      if (previousSpend > 0) {
-        trendPercentage = ((data.totalSpend - previousSpend) / previousSpend) * 100;
-        if (Math.abs(trendPercentage) > 5) {
-          trend = trendPercentage > 0 ? 'up' : 'down';
-        }
-      } else if (data.totalSpend > 0) {
-        trend = 'up';
-        trendPercentage = 100;
-      }
-
-      return {
-        itemName: name,
-        totalSpend: data.totalSpend,
-        totalQuantity: data.totalQuantity,
-        averagePrice,
-        transactionCount: data.dates.length,
-        percentageOfTotal: (data.totalSpend / totalSpend) * 100,
-        trend,
-        trendPercentage: Math.abs(trendPercentage),
-        lastPurchase: new Date(Math.max(...data.dates.map(d => d.getTime()))),
+  const loadAnalytics = async () => {
+    try {
+      setIsLoading(true);
+      const params = {
+        start_date: startDate,
+        end_date: endDate,
+        ...(searchQuery && { search: searchQuery }),
       };
-    });
+      const data = await ReceiptItemsService.getItemAnalytics(params);
+      setAnalytics(data);
+    } catch (error: any) {
+      console.error('Error loading item analytics:', error);
+      Alert.alert('Error', 'Failed to load item analytics.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    return analytics.sort((a, b) => b.totalSpend - a.totalSpend);
-  }, [period, start, end, prevStart]);
+  // Filter top items based on search
+  const filteredTopItems = useMemo(() => {
+    if (!analytics) return [];
+    if (!searchQuery) return analytics.top_items.slice(0, 5);
+    return analytics.top_items
+      .filter(item => item.item_name.toLowerCase().includes(searchQuery.toLowerCase()))
+      .slice(0, 5);
+  }, [analytics, searchQuery]);
 
-  // Filter items based on search
-  const filteredItems = itemAnalytics.filter(item =>
-    item.itemName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const topItems = filteredItems.slice(0, 5);
-  const totalSpend = itemAnalytics.reduce((sum, item) => sum + item.totalSpend, 0);
+  const totalSpend = useMemo(() => {
+    if (!analytics) return 0;
+    return analytics.top_items.reduce((sum, item) => sum + parseFloat(item.total_spent), 0);
+  }, [analytics]);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -190,119 +123,143 @@ export default function ItemAnalyticsScreen() {
         </View>
       </View>
 
-      {/* Top Items Summary */}
-      {topItems.length > 0 && (
-        <Card variant="elevated" style={styles.section}>
-          <View style={styles.sectionTitleContainer}>
-            <MaterialIcons name="star" size={20} color={Colors.warning.main} />
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Top Items by Spend
-            </ThemedText>
-          </View>
-          <View style={styles.itemsList}>
-            {topItems.map((item, index) => (
-              <View key={item.itemName} style={styles.itemCard}>
-                <View style={styles.itemRank}>
-                  <View style={[
-                    styles.rankCircle,
-                    index === 0 && styles.rankCircleGold,
-                    index === 1 && styles.rankCircleSilver,
-                    index === 2 && styles.rankCircleBronze,
-                  ]}>
-                    <ThemedText style={styles.rankText}>#{index + 1}</ThemedText>
-                  </View>
-                </View>
-
-                <View style={styles.itemContent}>
-                  <View style={styles.itemHeader}>
-                    <ThemedText style={styles.itemName}>{item.itemName}</ThemedText>
-                    <Badge
-                      label={`${item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→'} ${item.trendPercentage.toFixed(0)}%`}
-                      variant={item.trend === 'up' ? 'error' : item.trend === 'down' ? 'success' : 'default'}
-                      size="sm"
-                    />
-                  </View>
-
-                  <View style={styles.itemStats}>
-                    <View style={styles.statItem}>
-                      <MaterialIcons name="attach-money" size={16} color={Colors.text.secondary} />
-                      <ThemedText style={styles.statLabel}>Total</ThemedText>
-                      <ThemedText style={styles.statValue}>
-                        {formatCurrency(item.totalSpend)}
-                      </ThemedText>
-                    </View>
-
-                    <View style={styles.statItem}>
-                      <MaterialIcons name="inventory" size={16} color={Colors.text.secondary} />
-                      <ThemedText style={styles.statLabel}>Quantity</ThemedText>
-                      <ThemedText style={styles.statValue}>
-                        {item.totalQuantity.toFixed(1)}
-                      </ThemedText>
-                    </View>
-
-                    <View style={styles.statItem}>
-                      <MaterialIcons name="calculate" size={16} color={Colors.text.secondary} />
-                      <ThemedText style={styles.statLabel}>Avg Price</ThemedText>
-                      <ThemedText style={styles.statValue}>
-                        {formatCurrency(item.averagePrice)}
-                      </ThemedText>
-                    </View>
-                  </View>
-
-                  <View style={styles.itemMeta}>
-                    <ThemedText style={styles.itemMetaText}>
-                      {item.percentageOfTotal.toFixed(1)}% of total spend
-                    </ThemedText>
-                    <View style={styles.metaSeparator} />
-                    <ThemedText style={styles.itemMetaText}>
-                      {item.transactionCount} purchase{item.transactionCount !== 1 ? 's' : ''}
-                    </ThemedText>
-                  </View>
-
-                  <View style={styles.lastPurchaseContainer}>
-                    <MaterialIcons name="schedule" size={14} color={Colors.text.tertiary} />
-                    <ThemedText style={styles.lastPurchase}>
-                      Last purchased: {formatDate(item.lastPurchase)}
-                    </ThemedText>
-                  </View>
-                </View>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading analytics...</ThemedText>
+        </View>
+      ) : analytics ? (
+        <>
+          {/* Top Items Summary */}
+          {filteredTopItems.length > 0 && (
+            <Card variant="elevated" style={styles.section}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="star" size={20} color={Colors.warning.main} />
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Top Items by Spend
+                </ThemedText>
               </View>
-            ))}
-          </View>
-        </Card>
-      )}
+              <View style={styles.itemsList}>
+                {filteredTopItems.map((item, index) => {
+                  const percentage = totalSpend > 0 ? (parseFloat(item.total_spent) / totalSpend) * 100 : 0;
+                  return (
+                    <View key={item.item_name} style={styles.itemCard}>
+                      <View style={styles.itemRank}>
+                        <View style={[
+                          styles.rankCircle,
+                          index === 0 && styles.rankCircleGold,
+                          index === 1 && styles.rankCircleSilver,
+                          index === 2 && styles.rankCircleBronze,
+                        ]}>
+                          <ThemedText style={styles.rankText}>#{index + 1}</ThemedText>
+                        </View>
+                      </View>
 
-      {/* All Items List */}
-      {searchQuery && filteredItems.length > 0 && (
-        <Card variant="elevated" style={styles.section}>
-          <View style={styles.sectionTitleContainer}>
-            <MaterialIcons name="list" size={20} color={Colors.primary[600]} />
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Search Results ({filteredItems.length})
-            </ThemedText>
-          </View>
-          <View style={styles.compactList}>
-            {filteredItems.map((item) => (
-              <View key={item.itemName} style={styles.compactItemRow}>
-                <View style={styles.compactItemInfo}>
-                  <ThemedText style={styles.compactItemName}>{item.itemName}</ThemedText>
-                  <ThemedText style={styles.compactItemMeta}>
-                    Qty: {item.totalQuantity.toFixed(1)} • {item.transactionCount} purchase{item.transactionCount !== 1 ? 's' : ''}
-                  </ThemedText>
-                </View>
-                <View style={styles.compactItemAmount}>
-                  <ThemedText style={styles.compactItemSpend}>
-                    {formatCurrency(item.totalSpend)}
-                  </ThemedText>
-                  <Badge
-                    label={`${item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→'} ${item.trendPercentage.toFixed(0)}%`}
-                    variant={item.trend === 'up' ? 'error' : item.trend === 'down' ? 'success' : 'default'}
-                    size="sm"
-                  />
-                </View>
+                      <View style={styles.itemContent}>
+                        <View style={styles.itemHeader}>
+                          <ThemedText style={styles.itemName}>{item.item_name}</ThemedText>
+                        </View>
+
+                        <View style={styles.itemStats}>
+                          <View style={styles.statItem}>
+                            <MaterialIcons name="attach-money" size={16} color={Colors.text.secondary} />
+                            <ThemedText style={styles.statLabel}>Total</ThemedText>
+                            <ThemedText style={styles.statValue}>
+                              {formatCurrency(parseFloat(item.total_spent))}
+                            </ThemedText>
+                          </View>
+
+                          <View style={styles.statItem}>
+                            <MaterialIcons name="inventory" size={16} color={Colors.text.secondary} />
+                            <ThemedText style={styles.statLabel}>Count</ThemedText>
+                            <ThemedText style={styles.statValue}>
+                              {item.count}
+                            </ThemedText>
+                          </View>
+                        </View>
+
+                        <View style={styles.itemMeta}>
+                          <ThemedText style={styles.itemMetaText}>
+                            {percentage.toFixed(1)}% of total spend
+                          </ThemedText>
+                          <View style={styles.metaSeparator} />
+                          <ThemedText style={styles.itemMetaText}>
+                            {item.count} purchase{item.count !== 1 ? 's' : ''}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-            ))}
-          </View>
+            </Card>
+          )}
+
+          {/* Category Breakdown */}
+          {analytics.category_breakdown && analytics.category_breakdown.length > 0 && (
+            <Card variant="elevated" style={styles.section}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="category" size={20} color={Colors.primary[600]} />
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Category Breakdown
+                </ThemedText>
+              </View>
+              <View style={styles.compactList}>
+                {analytics.category_breakdown.map((cat, index) => (
+                  <View key={index} style={styles.compactItemRow}>
+                    <View style={styles.compactItemInfo}>
+                      <ThemedText style={styles.compactItemName}>{cat.category__name}</ThemedText>
+                      <ThemedText style={styles.compactItemMeta}>
+                        {cat.count} items
+                      </ThemedText>
+                    </View>
+                    <View style={styles.compactItemAmount}>
+                      <ThemedText style={styles.compactItemSpend}>
+                        {formatCurrency(typeof cat.total === 'string' ? parseFloat(cat.total) : cat.total)}
+                      </ThemedText>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+
+          {/* Recent Items */}
+          {analytics.recent_items && analytics.recent_items.length > 0 && (
+            <Card variant="elevated" style={styles.section}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="schedule" size={20} color={Colors.primary[600]} />
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Recent Items
+                </ThemedText>
+              </View>
+              <View style={styles.compactList}>
+                {analytics.recent_items.map((item, index) => (
+                  <View key={index} style={styles.compactItemRow}>
+                    <View style={styles.compactItemInfo}>
+                      <ThemedText style={styles.compactItemName}>{item.item_name}</ThemedText>
+                      <ThemedText style={styles.compactItemMeta}>
+                        {formatDate(new Date(item.last_purchase_date))}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.compactItemAmount}>
+                      <ThemedText style={styles.compactItemSpend}>
+                        {formatCurrency(parseFloat(item.total_spent))}
+                      </ThemedText>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+        </>
+      ) : (
+        <Card variant="outlined" style={styles.emptyCard}>
+          <MaterialIcons name="receipt-long" size={48} color={Colors.text.tertiary} />
+          <ThemedText style={styles.emptyText}>No item data available</ThemedText>
+          <ThemedText style={styles.emptySubtext}>
+            Start scanning receipts to see item analytics
+          </ThemedText>
         </Card>
       )}
 
@@ -592,5 +549,36 @@ const styles = StyleSheet.create({
     lineHeight: Typography.fontSize.sm * Typography.lineHeight.normal,
     color: Colors.text.secondary,
     marginBottom: Spacing.sm,
+  },
+  loadingContainer: {
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
+  },
+  emptyCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing['2xl'],
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+  },
+  emptyText: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.text.primary,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  emptySubtext: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+    textAlign: 'center',
   },
 });

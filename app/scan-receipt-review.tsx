@@ -5,92 +5,181 @@ import { Input } from '@/components/ui/input';
 import { MenuButton } from '@/components/menu-button';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput, Image } from 'react-native';
+import { useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput, Image, Alert, ActivityIndicator } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useReceipts } from '@/contexts/receipts-context';
+import { useTransactions } from '@/contexts/transactions-context';
+import { ReceiptsService, ReceiptItemsService } from '@/services/api';
+import { ReceiptItem } from '@/services/api/types';
 
 interface ExtractedItem {
-  id: string;
-  itemName: string;
+  id?: number;
+  item_name: string;
   quantity: number;
-  unitPrice: number;
-  totalPrice: number;
+  unit_price: number;
+  total_price: number;
+  category?: number;
+  product_code?: string;
 }
 
 export default function ScanReceiptReviewScreen() {
   const params = useLocalSearchParams();
   const imageUri = params.imageUri as string;
-
-  // Simulated extracted data - in real app, this comes from OCR/ML API
+  const receiptId = params.receiptId ? parseInt(params.receiptId as string) : null;
+  
+  const { updateReceipt, getReceiptById } = useReceipts();
+  const { createTransaction } = useTransactions();
+  
+  const [isLoading, setIsLoading] = useState(!!receiptId);
+  const [isSaving, setIsSaving] = useState(false);
   const [extractedData, setExtractedData] = useState({
-    merchantName: 'Tesco',
-    date: new Date().toLocaleDateString('en-GB'),
-    totalAmount: '180.00',
-    items: [
-      { id: '1', itemName: 'Beef', quantity: 5, unitPrice: 24.00, totalPrice: 120.00 },
-      { id: '2', itemName: 'Cauliflower', quantity: 4, unitPrice: 10.00, totalPrice: 40.00 },
-      { id: '3', itemName: 'Onion', quantity: 10, unitPrice: 2.00, totalPrice: 20.00 },
-    ] as ExtractedItem[],
+    vendor_name: '',
+    receipt_date: new Date().toISOString().split('T')[0],
+    total_amount: '0.00',
+    tax_amount: '0.00',
+    items: [] as ExtractedItem[],
   });
 
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  // Load receipt data if receiptId is provided
+  useEffect(() => {
+    if (receiptId) {
+      loadReceipt();
+    }
+  }, [receiptId]);
 
-  const updateItem = (id: string, field: keyof ExtractedItem, value: string | number) => {
+  const loadReceipt = async () => {
+    try {
+      setIsLoading(true);
+      const receipt = await ReceiptsService.getReceiptById(receiptId!);
+      
+      setExtractedData({
+        vendor_name: receipt.vendor_name || '',
+        receipt_date: receipt.receipt_date || new Date().toISOString().split('T')[0],
+        total_amount: receipt.total_amount || '0.00',
+        tax_amount: receipt.tax_amount || '0.00',
+        items: receipt.items.map(item => ({
+          id: item.id,
+          item_name: item.item_name,
+          quantity: parseFloat(item.quantity),
+          unit_price: parseFloat(item.unit_price),
+          total_price: parseFloat(item.total_price),
+          category: item.category,
+          product_code: item.product_code,
+        })),
+      });
+    } catch (error: any) {
+      console.error('Error loading receipt:', error);
+      Alert.alert('Error', 'Failed to load receipt data.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateItem = (index: number, field: keyof ExtractedItem, value: string | number) => {
     setExtractedData(prev => ({
       ...prev,
-      items: prev.items.map(item =>
-        item.id === id
-          ? { ...item, [field]: value, totalPrice: field === 'quantity' || field === 'unitPrice' 
-              ? (typeof value === 'number' ? value : parseFloat(value.toString())) * 
-                (field === 'quantity' ? item.unitPrice : item.quantity)
-              : item.totalPrice }
-          : item
-      ),
+      items: prev.items.map((item, idx) => {
+        if (idx !== index) return item;
+        
+        const updatedItem = { ...item, [field]: value };
+        
+        // Recalculate total_price if quantity or unit_price changes
+        if (field === 'quantity' || field === 'unit_price') {
+          updatedItem.total_price = updatedItem.quantity * updatedItem.unit_price;
+        }
+        
+        return updatedItem;
+      }),
     }));
   };
 
   const addItem = () => {
     const newItem: ExtractedItem = {
-      id: Date.now().toString(),
-      itemName: '',
+      item_name: '',
       quantity: 1,
-      unitPrice: 0,
-      totalPrice: 0,
+      unit_price: 0,
+      total_price: 0,
     };
     setExtractedData(prev => ({
       ...prev,
       items: [...prev.items, newItem],
     }));
-    setEditingItemId(newItem.id);
   };
 
-  const deleteItem = (id: string) => {
+  const deleteItem = (index: number) => {
     setExtractedData(prev => ({
       ...prev,
-      items: prev.items.filter(item => item.id !== id),
+      items: prev.items.filter((_, idx) => idx !== index),
     }));
   };
 
   const calculateTotal = () => {
-    return extractedData.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    return extractedData.items.reduce((sum, item) => sum + item.total_price, 0);
   };
 
-  const handleSave = () => {
-    // In real app, save transaction + receipt + items
-    console.log('Saving:', {
-      transaction: {
+  const handleSave = async () => {
+    if (!receiptId) {
+      Alert.alert('Error', 'Receipt ID is missing.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Update receipt
+      await updateReceipt(receiptId, {
+        vendor_name: extractedData.vendor_name,
+        receipt_date: extractedData.receipt_date,
+        total_amount: extractedData.total_amount,
+        tax_amount: extractedData.tax_amount,
+      });
+
+      // Update or create receipt items
+      for (const item of extractedData.items) {
+        if (item.id) {
+          // Update existing item
+          await ReceiptItemsService.updateReceiptItem(item.id, {
+            item_name: item.item_name,
+            quantity: item.quantity.toString(),
+            unit_price: item.unit_price.toString(),
+            total_price: item.total_price.toString(),
+            category: item.category,
+            product_code: item.product_code,
+          });
+        } else {
+          // Create new item
+          await ReceiptItemsService.createReceiptItem({
+            receipt: receiptId,
+            item_name: item.item_name,
+            quantity: item.quantity.toString(),
+            unit_price: item.unit_price.toString(),
+            total_price: item.total_price.toString(),
+            category: item.category,
+            product_code: item.product_code,
+          });
+        }
+      }
+
+      // Create transaction from receipt
+      // Note: You may want to get the merchant ID from the merchant name
+      // For now, we'll create without merchant
+      await createTransaction({
         type: 'expense',
-        amount: parseFloat(extractedData.totalAmount),
-        merchantName: extractedData.merchantName,
-        date: extractedData.date,
-      },
-      receipt: {
-        merchantName: extractedData.merchantName,
-        totalAmount: parseFloat(extractedData.totalAmount),
-        items: extractedData.items,
-      },
-    });
-    router.back();
+        amount: extractedData.total_amount,
+        date: extractedData.receipt_date,
+        category: 1, // Default category - you may want to make this dynamic
+        description: `Receipt from ${extractedData.vendor_name}`,
+      });
+
+      Alert.alert('Success', 'Receipt and transaction saved successfully!', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error: any) {
+      console.error('Error saving receipt:', error);
+      Alert.alert('Error', error.message || 'Failed to save receipt. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -111,35 +200,49 @@ export default function ScanReceiptReviewScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Receipt Image */}
-      {imageUri && (
-        <Card variant="elevated" style={styles.imageCard}>
-          <Image source={{ uri: imageUri }} style={styles.image} />
-        </Card>
-      )}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading receipt data...</ThemedText>
+        </View>
+      ) : (
+        <>
+          {/* Receipt Image */}
+          {imageUri && (
+            <Card variant="elevated" style={styles.imageCard}>
+              <Image source={{ uri: imageUri }} style={styles.image} />
+            </Card>
+          )}
 
-      {/* Merchant & Date */}
-      <Card variant="elevated" style={styles.infoCard}>
-        <Input
-          label="Merchant"
-          value={extractedData.merchantName}
-          onChangeText={(value) => setExtractedData(prev => ({ ...prev, merchantName: value }))}
-          leftIcon={<MaterialIcons name="store" size={20} color={Colors.primary[500]} />}
-        />
-        <Input
-          label="Date"
-          value={extractedData.date}
-          onChangeText={(value) => setExtractedData(prev => ({ ...prev, date: value }))}
-          leftIcon={<MaterialIcons name="calendar-today" size={20} color={Colors.primary[500]} />}
-        />
-        <Input
-          label="Total Amount"
-          value={extractedData.totalAmount}
-          onChangeText={(value) => setExtractedData(prev => ({ ...prev, totalAmount: value }))}
-          leftIcon={<MaterialIcons name="attach-money" size={20} color={Colors.primary[500]} />}
-          keyboardType="decimal-pad"
-        />
-      </Card>
+          {/* Merchant & Date */}
+          <Card variant="elevated" style={styles.infoCard}>
+            <Input
+              label="Vendor"
+              value={extractedData.vendor_name}
+              onChangeText={(value) => setExtractedData(prev => ({ ...prev, vendor_name: value }))}
+              leftIcon={<MaterialIcons name="store" size={20} color={Colors.primary[500]} />}
+            />
+            <Input
+              label="Date"
+              value={extractedData.receipt_date}
+              onChangeText={(value) => setExtractedData(prev => ({ ...prev, receipt_date: value }))}
+              leftIcon={<MaterialIcons name="calendar-today" size={20} color={Colors.primary[500]} />}
+            />
+            <Input
+              label="Total Amount"
+              value={extractedData.total_amount}
+              onChangeText={(value) => setExtractedData(prev => ({ ...prev, total_amount: value }))}
+              leftIcon={<MaterialIcons name="attach-money" size={20} color={Colors.primary[500]} />}
+              keyboardType="decimal-pad"
+            />
+            <Input
+              label="Tax Amount"
+              value={extractedData.tax_amount}
+              onChangeText={(value) => setExtractedData(prev => ({ ...prev, tax_amount: value }))}
+              leftIcon={<MaterialIcons name="receipt" size={20} color={Colors.primary[500]} />}
+              keyboardType="decimal-pad"
+            />
+          </Card>
 
       {/* Items List */}
       <Card variant="elevated" style={styles.itemsCard}>
@@ -157,14 +260,14 @@ export default function ScanReceiptReviewScreen() {
 
         <View style={styles.itemsList}>
           {extractedData.items.map((item, index) => (
-            <Card key={item.id} variant="outlined" style={styles.itemCard}>
+            <Card key={item.id || `item-${index}`} variant="outlined" style={styles.itemCard}>
               <View style={styles.itemHeader}>
                 <View style={styles.itemNumber}>
                   <Text style={styles.itemNumberText}>#{index + 1}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.deleteButton}
-                  onPress={() => deleteItem(item.id)}
+                  onPress={() => deleteItem(index)}
                 >
                   <MaterialIcons name="delete-outline" size={20} color={Colors.error.main} />
                 </TouchableOpacity>
@@ -172,8 +275,8 @@ export default function ScanReceiptReviewScreen() {
 
               <Input
                 label="Item Name"
-                value={item.itemName}
-                onChangeText={(value) => updateItem(item.id, 'itemName', value)}
+                value={item.item_name}
+                onChangeText={(value) => updateItem(index, 'item_name', value)}
                 placeholder="e.g., Beef, Milk"
               />
 
@@ -183,7 +286,7 @@ export default function ScanReceiptReviewScreen() {
                   <TextInput
                     style={styles.itemFieldInput}
                     value={item.quantity.toString()}
-                    onChangeText={(value) => updateItem(item.id, 'quantity', parseFloat(value) || 0)}
+                    onChangeText={(value) => updateItem(index, 'quantity', parseFloat(value) || 0)}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -191,15 +294,15 @@ export default function ScanReceiptReviewScreen() {
                   <Text style={styles.itemFieldLabel}>Unit Price</Text>
                   <TextInput
                     style={styles.itemFieldInput}
-                    value={item.unitPrice.toFixed(2)}
-                    onChangeText={(value) => updateItem(item.id, 'unitPrice', parseFloat(value) || 0)}
+                    value={item.unit_price.toFixed(2)}
+                    onChangeText={(value) => updateItem(index, 'unit_price', parseFloat(value) || 0)}
                     keyboardType="decimal-pad"
                   />
                 </View>
                 <View style={styles.itemField}>
                   <Text style={styles.itemFieldLabel}>Total</Text>
                   <Text style={styles.itemTotal}>
-                    £{item.totalPrice.toFixed(2)}
+                    £{item.total_price.toFixed(2)}
                   </Text>
                 </View>
               </View>
@@ -221,14 +324,18 @@ export default function ScanReceiptReviewScreen() {
           variant="outline"
           onPress={() => router.back()}
           style={styles.cancelButton}
+          disabled={isSaving}
         />
         <Button
-          title="Save Transaction"
+          title={isSaving ? 'Saving...' : 'Save Transaction'}
           variant="primary"
           onPress={handleSave}
           style={styles.saveButton}
+          disabled={isSaving}
         />
       </View>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -399,5 +506,16 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 2,
+  },
+  loadingContainer: {
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
   },
 });

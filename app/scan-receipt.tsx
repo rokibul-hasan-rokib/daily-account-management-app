@@ -8,8 +8,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useReceipts } from '@/contexts/receipts-context';
+import { ReceiptsService } from '@/services/api';
 
 export default function ScanReceiptScreen() {
+  const { createReceipt } = useReceipts();
   const [image, setImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -84,15 +87,43 @@ export default function ScanReceiptScreen() {
     if (!image) return;
     setIsProcessing(true);
     
-    // Simulate OCR processing - in real app, this would call your backend API
-    setTimeout(() => {
+    try {
+      // Create FormData for image upload
+      const formData = new FormData();
+      
+      // For React Native, we need to handle the image URI differently
+      const imageUriParts = image.split('/');
+      const imageName = imageUriParts[imageUriParts.length - 1] || 'receipt.jpg';
+      
+      // Append image file
+      formData.append('image', {
+        uri: Platform.OS === 'ios' ? image.replace('file://', '') : image,
+        type: 'image/jpeg',
+        name: imageName,
+      } as any);
+
+      // Upload receipt with OCR extraction
+      const response = await ReceiptsService.uploadReceipt(formData);
+      
       setIsProcessing(false);
-      // Navigate to review screen with image
+      
+      // Navigate to review screen with extracted receipt data
       router.push({
         pathname: '/scan-receipt-review',
-        params: { imageUri: image },
+        params: { 
+          receiptId: response.receipt.id.toString(),
+          imageUri: image,
+        },
       });
-    }, 2000);
+    } catch (error: any) {
+      setIsProcessing(false);
+      console.error('Error processing receipt:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to process receipt. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   return (
