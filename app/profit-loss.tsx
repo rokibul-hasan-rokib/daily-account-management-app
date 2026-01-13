@@ -79,11 +79,11 @@ export default function ProfitLossScreen() {
         <View style={styles.explanationContent}>
           <MaterialIcons name="info" size={20} color={Colors.info.main} />
           <View style={styles.explanationText}>
-            <Text style={styles.explanationTitle}>What is Profit & Loss?</Text>
-            <Text style={styles.explanationBody}>
+            <ThemedText style={styles.explanationTitle}>What is Profit & Loss?</ThemedText>
+            <ThemedText style={styles.explanationBody}>
               Profit = Income − Expenses{'\n'}
               A positive number means you made money. A negative number means you spent more than you earned.
-            </Text>
+            </ThemedText>
           </View>
         </View>
       </Card>
