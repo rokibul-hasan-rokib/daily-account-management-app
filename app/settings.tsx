@@ -2,43 +2,88 @@ import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { MenuButton } from '@/components/menu-button';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, Switch } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text, Switch, ActivityIndicator, Alert } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useProfile } from '@/contexts/profile-context';
+import { useFocusEffect } from 'expo-router';
 
-interface Setting {
-  id: string;
-  title: string;
-  description: string;
-  type: 'switch' | 'button';
-  value?: boolean;
-  icon: string;
-}
-
-const settings: Setting[] = [
-  { id: '1', title: 'Dark Mode', description: 'Switch to dark theme', type: 'switch', value: false, icon: 'dark-mode' },
-  { id: '2', title: 'Notifications', description: 'Enable push notifications', type: 'switch', value: true, icon: 'notifications' },
-  { id: '3', title: 'Biometric Lock', description: 'Use fingerprint or face ID', type: 'switch', value: false, icon: 'fingerprint' },
-  { id: '4', title: 'Auto-Backup', description: 'Automatically backup data to cloud', type: 'switch', value: true, icon: 'cloud-upload' },
+const currencies = [
+  { code: 'GBP', label: 'GBP (£) - British Pound' },
+  { code: 'USD', label: 'USD ($) - US Dollar' },
+  { code: 'EUR', label: 'EUR (€) - Euro' },
+  { code: 'JPY', label: 'JPY (¥) - Japanese Yen' },
+  { code: 'CAD', label: 'CAD ($) - Canadian Dollar' },
+  { code: 'AUD', label: 'AUD ($) - Australian Dollar' },
 ];
 
-const actionSettings: Setting[] = [
-  { id: '5', title: 'Export Data', description: 'Download all your data', type: 'button', icon: 'download' },
-  { id: '6', title: 'Import Data', description: 'Import data from file', type: 'button', icon: 'upload' },
-  { id: '7', title: 'Clear Cache', description: 'Free up storage space', type: 'button', icon: 'delete-outline' },
+const defaultViews = [
+  { value: 'dashboard', label: 'Dashboard' },
+  { value: 'transactions', label: 'Transactions' },
+  { value: 'profit-loss', label: 'Profit & Loss' },
 ];
 
 export default function SettingsScreen() {
-  const [settingsState, setSettingsState] = useState(settings);
+  const { profile, isLoading, updateProfile, refreshProfile } = useProfile();
+  const [isSaving, setIsSaving] = useState(false);
 
-  const toggleSetting = (id: string) => {
-    setSettingsState(prev => prev.map(setting => 
-      setting.id === id ? { ...setting, value: !setting.value } : setting
-    ));
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+    }, [refreshProfile])
+  );
+
+  const handleToggle = async (field: keyof typeof profile, value: boolean) => {
+    if (!profile) return;
+    
+    try {
+      setIsSaving(true);
+      await updateProfile({ [field]: value });
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update setting.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCurrencyChange = async (currency: string) => {
+    try {
+      setIsSaving(true);
+      await updateProfile({ currency });
+      Alert.alert('Success', 'Currency updated successfully.');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update currency.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDefaultViewChange = async (defaultView: string) => {
+    try {
+      setIsSaving(true);
+      await updateProfile({ default_view: defaultView });
+      Alert.alert('Success', 'Default view updated successfully.');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update default view.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAlertDaysChange = async (days: number) => {
+    try {
+      setIsSaving(true);
+      await updateProfile({ alert_days_before: days });
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update alert days.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAction = (id: string, title: string) => {
-    alert(`${title} functionality coming soon!`);
+    Alert.alert('Coming Soon', `${title} functionality will be available in a future update.`);
   };
 
   return (
@@ -56,31 +101,259 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* App Settings */}
-      <Card variant="elevated" style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>App Settings</ThemedText>
-        <View style={styles.settingsList}>
-          {settingsState.map((setting) => (
-            <View key={setting.id} style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.settingIcon}>
-                  <MaterialIcons name={setting.icon as any} size={24} color={Colors.primary[600]} />
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
+          <ThemedText style={styles.loadingText}>Loading settings...</ThemedText>
+        </View>
+      ) : profile ? (
+        <>
+          {/* Profile Settings */}
+          <Card variant="elevated" style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>Profile Settings</ThemedText>
+            <View style={styles.settingsList}>
+              {/* Currency */}
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <View style={styles.settingIcon}>
+                    <MaterialIcons name="attach-money" size={24} color={Colors.primary[600]} />
+                  </View>
+                  <View style={styles.settingInfo}>
+                    <ThemedText style={styles.settingTitle}>Currency</ThemedText>
+                    <ThemedText style={styles.settingDescription}>
+                      {profile.currency_display || profile.currency}
+                    </ThemedText>
+                  </View>
                 </View>
-                <View style={styles.settingInfo}>
-                  <ThemedText style={styles.settingTitle}>{setting.title}</ThemedText>
-                  <ThemedText style={styles.settingDescription}>{setting.description}</ThemedText>
-                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert(
+                      'Select Currency',
+                      'Choose your preferred currency',
+                      currencies.map(c => ({
+                        text: c.label,
+                        onPress: () => handleCurrencyChange(c.code),
+                      })).concat([{ text: 'Cancel', style: 'cancel' }])
+                    );
+                  }}
+                >
+                  <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
+                </TouchableOpacity>
               </View>
-              {setting.type === 'switch' && (
+
+              {/* Default View */}
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <View style={styles.settingIcon}>
+                    <MaterialIcons name="dashboard" size={24} color={Colors.primary[600]} />
+                  </View>
+                  <View style={styles.settingInfo}>
+                    <ThemedText style={styles.settingTitle}>Default View</ThemedText>
+                    <ThemedText style={styles.settingDescription}>
+                      {defaultViews.find(v => v.value === profile.default_view)?.label || 'Dashboard'}
+                    </ThemedText>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert(
+                      'Select Default View',
+                      'Choose your default view when opening the app',
+                      defaultViews.map(v => ({
+                        text: v.label,
+                        onPress: () => handleDefaultViewChange(v.value),
+                      })).concat([{ text: 'Cancel', style: 'cancel' }])
+                    );
+                  }}
+                >
+                  <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Card>
+
+          {/* Display Settings */}
+          <Card variant="elevated" style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>Display Settings</ThemedText>
+            <View style={styles.settingsList}>
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <View style={styles.settingIcon}>
+                    <MaterialIcons name="account-balance-wallet" size={24} color={Colors.primary[600]} />
+                  </View>
+                  <View style={styles.settingInfo}>
+                    <ThemedText style={styles.settingTitle}>Show Balance</ThemedText>
+                    <ThemedText style={styles.settingDescription}>
+                      Display account balance in dashboard
+                    </ThemedText>
+                  </View>
+                </View>
                 <Switch
-                  value={setting.value}
-                  onValueChange={() => toggleSetting(setting.id)}
+                  value={profile.show_balance ?? true}
+                  onValueChange={(value) => handleToggle('show_balance', value)}
                   trackColor={{ false: Colors.gray[300], true: Colors.primary[500] }}
                   thumbColor={Colors.background.light}
+                  disabled={isSaving}
                 />
-              )}
+              </View>
+
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <View style={styles.settingIcon}>
+                    <MaterialIcons name="trending-up" size={24} color={Colors.primary[600]} />
+                  </View>
+                  <View style={styles.settingInfo}>
+                    <ThemedText style={styles.settingTitle}>Show Profit & Loss</ThemedText>
+                    <ThemedText style={styles.settingDescription}>
+                      Display profit and loss information
+                    </ThemedText>
+                  </View>
+                </View>
+                <Switch
+                  value={profile.show_profit_loss ?? true}
+                  onValueChange={(value) => handleToggle('show_profit_loss', value)}
+                  trackColor={{ false: Colors.gray[300], true: Colors.primary[500] }}
+                  thumbColor={Colors.background.light}
+                  disabled={isSaving}
+                />
+              </View>
             </View>
-          ))}
+          </Card>
+
+          {/* Alert Settings */}
+          <Card variant="elevated" style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>Alert Settings</ThemedText>
+            <View style={styles.settingsList}>
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <View style={styles.settingIcon}>
+                    <MaterialIcons name="email" size={24} color={Colors.primary[600]} />
+                  </View>
+                  <View style={styles.settingInfo}>
+                    <ThemedText style={styles.settingTitle}>Email Alerts</ThemedText>
+                    <ThemedText style={styles.settingDescription}>
+                      Receive alerts via email
+                    </ThemedText>
+                  </View>
+                </View>
+                <Switch
+                  value={profile.email_alerts ?? true}
+                  onValueChange={(value) => handleToggle('email_alerts', value)}
+                  trackColor={{ false: Colors.gray[300], true: Colors.primary[500] }}
+                  thumbColor={Colors.background.light}
+                  disabled={isSaving}
+                />
+              </View>
+
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <View style={styles.settingIcon}>
+                    <MaterialIcons name="notifications" size={24} color={Colors.primary[600]} />
+                  </View>
+                  <View style={styles.settingInfo}>
+                    <ThemedText style={styles.settingTitle}>Push Alerts</ThemedText>
+                    <ThemedText style={styles.settingDescription}>
+                      Receive push notifications
+                    </ThemedText>
+                  </View>
+                </View>
+                <Switch
+                  value={profile.push_alerts ?? false}
+                  onValueChange={(value) => handleToggle('push_alerts', value)}
+                  trackColor={{ false: Colors.gray[300], true: Colors.primary[500] }}
+                  thumbColor={Colors.background.light}
+                  disabled={isSaving}
+                />
+              </View>
+
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <View style={styles.settingIcon}>
+                    <MaterialIcons name="schedule" size={24} color={Colors.primary[600]} />
+                  </View>
+                  <View style={styles.settingInfo}>
+                    <ThemedText style={styles.settingTitle}>Alert Days Before</ThemedText>
+                    <ThemedText style={styles.settingDescription}>
+                      Days before bill due date to send alert
+                    </ThemedText>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.prompt(
+                      'Alert Days Before',
+                      'Enter number of days before bill due date to send alert',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Save',
+                          onPress: (value) => {
+                            const days = parseInt(value || '3');
+                            if (days >= 0 && days <= 30) {
+                              handleAlertDaysChange(days);
+                            } else {
+                              Alert.alert('Error', 'Please enter a number between 0 and 30.');
+                            }
+                          },
+                        },
+                      ],
+                      'plain-text',
+                      (profile.alert_days_before || 3).toString()
+                    );
+                  }}
+                >
+                  <ThemedText style={styles.settingValue}>
+                    {profile.alert_days_before || 3} days
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Card>
+        </>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <MaterialIcons name="settings" size={64} color={Colors.text.tertiary} />
+          <ThemedText style={styles.emptyText}>Unable to load profile settings</ThemedText>
+        </View>
+      )}
+
+      {/* Data Management */}
+      <Card variant="elevated" style={styles.section}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Data Management</ThemedText>
+        <View style={styles.settingsList}>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => handleAction('export', 'Export Data')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingLeft}>
+              <View style={styles.settingIcon}>
+                <MaterialIcons name="download" size={24} color={Colors.primary[600]} />
+              </View>
+              <View style={styles.settingInfo}>
+                <ThemedText style={styles.settingTitle}>Export Data</ThemedText>
+                <ThemedText style={styles.settingDescription}>Download all your data</ThemedText>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => handleAction('import', 'Import Data')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingLeft}>
+              <View style={styles.settingIcon}>
+                <MaterialIcons name="upload" size={24} color={Colors.primary[600]} />
+              </View>
+              <View style={styles.settingInfo}>
+                <ThemedText style={styles.settingTitle}>Import Data</ThemedText>
+                <ThemedText style={styles.settingDescription}>Import data from file</ThemedText>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
+          </TouchableOpacity>
         </View>
       </Card>
 
@@ -201,6 +474,34 @@ const styles = StyleSheet.create({
   settingDescription: {
     fontSize: Typography.fontSize.sm,
     color: Colors.text.secondary,
+  },
+  settingValue: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.primary[600],
+  },
+  loadingContainer: {
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
+  },
+  emptyContainer: {
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 300,
+  },
+  emptyText: {
+    marginTop: Spacing.md,
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
+    textAlign: 'center',
   },
   aboutContent: {
     alignItems: 'center',
