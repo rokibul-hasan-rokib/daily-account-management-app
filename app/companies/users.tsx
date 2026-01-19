@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { useCompanyUsers } from '@/contexts/company-users-context';
 import { CompanyUser } from '@/services/api/types';
 
 export default function CompanyUsersScreen() {
+  const router = useRouter();
   const { companyUsers, isLoading, loadCompanyUsers, deleteCompanyUser } = useCompanyUsers();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -69,6 +70,19 @@ export default function CompanyUsersScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <MaterialIcons name="people" size={24} color={Colors.primary[500]} />
+          <ThemedText type="title" style={styles.pageTitle}>Company Users</ThemedText>
+        </View>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push('/companies/users/add')}
+        >
+          <MaterialIcons name="add" size={24} color={Colors.background.light} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.searchContainer}>
         <MaterialIcons name="search" size={20} color={Colors.text.secondary} style={styles.searchIcon} />
         <TextInput
@@ -140,15 +154,24 @@ export default function CompanyUsersScreen() {
                 </View>
               )}
 
-              {!user.is_owner && (
+              <View style={styles.userActions}>
                 <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteUser(user.id, user.user.username)}
+                  style={styles.editButton}
+                  onPress={() => router.push(`/companies/users/${user.id}`)}
                 >
-                  <MaterialIcons name="delete-outline" size={18} color={Colors.error[500]} />
-                  <ThemedText style={styles.deleteButtonText}>Remove</ThemedText>
+                  <MaterialIcons name="edit" size={18} color={Colors.primary[500]} />
+                  <ThemedText style={styles.editButtonText}>Edit</ThemedText>
                 </TouchableOpacity>
-              )}
+                {!user.is_owner && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteUser(user.id, user.user.username)}
+                  >
+                    <MaterialIcons name="delete-outline" size={18} color={Colors.error[500]} />
+                    <ThemedText style={styles.deleteButtonText}>Remove</ThemedText>
+                  </TouchableOpacity>
+                )}
+              </View>
             </Card>
           ))
         )}
@@ -161,6 +184,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background.light,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  pageTitle: {
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary[500],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centerContainer: {
     flex: 1,
@@ -259,13 +309,27 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.base,
     color: Colors.text.secondary,
   },
-  deleteButton: {
+  userActions: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: Spacing.md,
     marginTop: Spacing.sm,
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.gray[200],
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  editButtonText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.primary[500],
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.xs,
   },
   deleteButtonText: {

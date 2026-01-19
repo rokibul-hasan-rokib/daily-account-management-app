@@ -140,7 +140,7 @@ export function RolesProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadRoles = useCallback(async () => {
+  const loadRoles = useCallback(async (params?: { search?: string; ordering?: string }) => {
     if (!currentCompany) return;
 
     try {
@@ -148,21 +148,23 @@ export function RolesProvider({ children }: { children: ReactNode }) {
       
       // Try cache first
       const cached = await getStoredRoles();
-      if (cached && cached.length >= 0) {
+      if (cached && cached.length >= 0 && !params?.search) {
         setRoles(cached);
       }
 
       // Fetch from API
-      const response = await RolesService.getRoles();
+      const response = await RolesService.getRoles(params);
       const fetchedRoles = response.results || [];
       
       setRoles(fetchedRoles);
-      await storeRoles(fetchedRoles);
+      if (!params?.search) {
+        await storeRoles(fetchedRoles);
+      }
     } catch (error: any) {
       console.error('Error loading roles:', error);
       // If API fails, try cache
       const cached = await getStoredRoles();
-      if (cached) {
+      if (cached && !params?.search) {
         setRoles(cached);
       }
     } finally {
@@ -209,10 +211,16 @@ export function RolesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteRole = useCallback(async (id: number): Promise<void> => {
+    // Check if role is system role before attempting deletion
+    const roleToDelete = roles.find(r => r.id === id);
+    if (roleToDelete?.is_system) {
+      throw new Error('System roles cannot be deleted');
+    }
+    
     await RolesService.deleteRole(id);
     setRoles(prev => prev.filter(r => r.id !== id));
     await clearCachedRoles();
-  }, []);
+  }, [roles]);
 
   const clearRoles = useCallback(async () => {
     setRoles([]);

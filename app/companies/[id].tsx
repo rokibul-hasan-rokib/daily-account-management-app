@@ -167,6 +167,14 @@ export default function CompanyDetailsScreen() {
       <View style={styles.actionsContainer}>
         <TouchableOpacity
           style={styles.actionButton}
+          onPress={() => router.push(`/companies/${id}/edit`)}
+        >
+          <MaterialIcons name="edit" size={20} color={Colors.primary[500]} />
+          <ThemedText style={styles.actionButtonText}>Edit Company</ThemedText>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
           onPress={() => router.push('/companies/users')}
         >
           <MaterialIcons name="people" size={20} color={Colors.primary[500]} />

@@ -3,7 +3,7 @@
  * Manages company state and switching for multi-tenant support
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { CompaniesService } from '@/services/api';
@@ -34,6 +34,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const isLoadingCompaniesRef = useRef(false);
 
   // Storage helpers
   const getStoredCompanyId = async (): Promise<number | null> => {
@@ -132,47 +133,72 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   // Load company details with stats
   const loadCompanyDetails = useCallback(async (companyId: number) => {
     try {
-      // Try to get company from list first (faster)
-      const existingCompany = companies.find(c => c.id === companyId);
-      if (existingCompany && !existingCompany.stats) {
-        // We have basic info but need details with stats
-        const company = await CompaniesService.getCompanyDetails(companyId);
-        setCurrentCompany(company);
-        await setStoredCompanyId(companyId);
-        // Update in companies list
-        setCompanies(prev => prev.map(c => c.id === companyId ? company : c));
-      } else if (existingCompany) {
-        // Already have full details
-        setCurrentCompany(existingCompany);
-        await setStoredCompanyId(companyId);
-      } else {
-        // Company not in list, fetch it
-        const company = await CompaniesService.getCompanyDetails(companyId);
-        setCurrentCompany(company);
-        await setStoredCompanyId(companyId);
-        // Add to companies list if not already there
-        setCompanies(prev => {
-          const exists = prev.find(c => c.id === companyId);
-          if (!exists) {
-            return [...prev, company];
-          }
-          return prev.map(c => c.id === companyId ? company : c);
-        });
-      }
+      // Get current companies state
+      setCompanies(prev => {
+        const existingCompany = prev.find(c => c.id === companyId);
+        
+        if (existingCompany && !existingCompany.stats) {
+          // We have basic info but need details with stats - fetch in background
+          CompaniesService.getCompanyDetails(companyId)
+            .then(async (company) => {
+              setCurrentCompany(company);
+              await setStoredCompanyId(companyId);
+              setCompanies(current => current.map(c => c.id === companyId ? company : c));
+            })
+            .catch(async (err) => {
+              console.error('Error loading company details:', err);
+              setCurrentCompany(existingCompany);
+              await setStoredCompanyId(companyId);
+            });
+          return prev;
+        } else if (existingCompany) {
+          // Already have full details
+          setCurrentCompany(existingCompany);
+          setStoredCompanyId(companyId).catch(err => console.warn('Error storing company ID:', err));
+          return prev;
+        } else {
+          // Company not in list, fetch it
+          CompaniesService.getCompanyDetails(companyId)
+            .then(async (company) => {
+              setCurrentCompany(company);
+              await setStoredCompanyId(companyId);
+              setCompanies(current => {
+                const exists = current.find(c => c.id === companyId);
+                if (!exists) {
+                  return [...current, company];
+                }
+                return current.map(c => c.id === companyId ? company : c);
+              });
+            })
+            .catch(err => {
+              console.error('Error loading company details:', err);
+            });
+          return prev;
+        }
+      });
     } catch (error) {
       console.error('Error loading company details:', error);
       // Fallback to basic company info
-      const existingCompany = companies.find(c => c.id === companyId);
-      if (existingCompany) {
-        setCurrentCompany(existingCompany);
-        await setStoredCompanyId(companyId);
-      }
+      setCompanies(prev => {
+        const existingCompany = prev.find(c => c.id === companyId);
+        if (existingCompany) {
+          setCurrentCompany(existingCompany);
+          setStoredCompanyId(companyId).catch(err => console.warn('Error storing company ID:', err));
+        }
+        return prev;
+      });
     }
-  }, [companies]);
+  }, []);
 
   // Load companies from API
   const loadCompanies = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (isLoadingCompaniesRef.current) {
+      return;
+    }
+
     try {
+      isLoadingCompaniesRef.current = true;
       setIsLoading(true);
       
       // Show cached data immediately for better UX
@@ -248,6 +274,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       setIsLoading(false);
+      isLoadingCompaniesRef.current = false;
     }
   }, [loadCompanyDetails]);
 
@@ -264,14 +291,14 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadCompanyDetails]);
 
   // Refresh current company data
   const refreshCurrentCompany = useCallback(async () => {
     if (currentCompany) {
       await loadCompanyDetails(currentCompany.id);
     }
-  }, [currentCompany]);
+  }, [currentCompany, loadCompanyDetails]);
 
   // Clear all company data
   const clearCompanies = useCallback(async () => {

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -16,43 +16,55 @@ import { Company } from '@/services/api/types';
 
 export default function CompaniesScreen() {
   const { companies, currentCompany, isLoading, isSuperAdmin, loadCompanies, switchCompany } = useCompany();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  // Load companies when screen is focused
+  // Load companies when screen is focused (only once per focus)
   useFocusEffect(
     useCallback(() => {
-      loadCompanies();
-    }, [loadCompanies])
+      if (!hasLoaded && !isLoading) {
+        setHasLoaded(true);
+        loadCompanies();
+      }
+      return () => {
+        // Reset when screen loses focus
+        setHasLoaded(false);
+      };
+    }, [hasLoaded, isLoading])
   );
 
-  const filteredCompanies = useMemo(() => {
-    if (!searchQuery.trim()) return companies;
-    const query = searchQuery.toLowerCase();
-    return companies.filter(
-      company =>
-        company.name.toLowerCase().includes(query) ||
-        company.email?.toLowerCase().includes(query) ||
-        company.domain?.toLowerCase().includes(query)
-    );
-  }, [companies, searchQuery]);
-
-  const handleCompanyPress = (company: Company) => {
-    if (isSuperAdmin) {
-      router.push(`/companies/${company.id}`);
-    } else {
-      // Regular admin - show their company details
-      router.push(`/companies/${company.id}`);
+  // Set selected company when current company changes
+  React.useEffect(() => {
+    if (currentCompany) {
+      setSelectedCompanyId(currentCompany.id);
     }
-  };
+  }, [currentCompany]);
 
-  const handleSwitchCompany = async (companyId: number) => {
+  const handleSelectCompany = async () => {
+    if (!selectedCompanyId) {
+      Alert.alert('Error', 'Please select a company');
+      return;
+    }
+
+    if (selectedCompanyId === currentCompany?.id) {
+      Alert.alert('Info', 'This company is already selected');
+      return;
+    }
+
     try {
-      await switchCompany(companyId);
-      Alert.alert('Success', 'Company switched successfully');
-      router.push('/(tabs)');
+      setSwitching(true);
+      await switchCompany(selectedCompanyId);
+      Alert.alert('Success', 'Company switched successfully', [
+        {
+          text: 'OK',
+          onPress: () => router.push('/(tabs)'),
+        },
+      ]);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to switch company');
+    } finally {
+      setSwitching(false);
     }
   };
 
@@ -86,6 +98,13 @@ export default function CompaniesScreen() {
   if (!isSuperAdmin && currentCompany) {
     return (
       <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <MaterialIcons name="business" size={24} color={Colors.primary[500]} />
+            <ThemedText type="title" style={styles.pageTitle}>My Company</ThemedText>
+          </View>
+        </View>
+
         <Card variant="elevated" style={styles.companyCard}>
           <View style={styles.companyHeader}>
             <View style={styles.companyInfo}>
@@ -146,75 +165,129 @@ export default function CompaniesScreen() {
     );
   }
 
-  // Super admin view - list all companies
+  // Super admin view - company selection interface
   return (
     <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={20} color={Colors.text.secondary} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search companies..."
-          placeholderTextColor={Colors.text.tertiary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-            <MaterialIcons name="close" size={20} color={Colors.text.secondary} />
-          </TouchableOpacity>
-        )}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <MaterialIcons name="business" size={24} color={Colors.primary[500]} />
+          <ThemedText type="title" style={styles.pageTitle}>Select Company</ThemedText>
+        </View>
       </View>
 
-      <ScrollView style={styles.scrollView}>
-        {filteredCompanies.length === 0 ? (
+      {/* Super Admin Mode Banner */}
+      {isSuperAdmin && (
+        <View style={styles.banner}>
+          <MaterialIcons name="lock" size={20} color={Colors.primary[600]} />
+          <ThemedText style={styles.bannerText}>Super Admin Mode: You can select any company.</ThemedText>
+        </View>
+      )}
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Select a Company</ThemedText>
+
+        {companies.length === 0 ? (
           <Card variant="elevated" style={styles.emptyCard}>
             <MaterialIcons name="business" size={48} color={Colors.text.tertiary} />
             <ThemedText style={styles.emptyText}>No companies found</ThemedText>
           </Card>
         ) : (
-          filteredCompanies.map((company) => (
-            <Card key={company.id} variant="elevated" style={styles.companyCard}>
+          companies.map((company) => {
+            const isSelected = selectedCompanyId === company.id;
+            const isCurrent = currentCompany?.id === company.id;
+
+            return (
               <TouchableOpacity
-                onPress={() => handleCompanyPress(company)}
+                key={company.id}
+                onPress={() => setSelectedCompanyId(company.id)}
                 activeOpacity={0.7}
               >
-                <View style={styles.companyHeader}>
-                  <View style={styles.companyInfo}>
-                    <ThemedText type="title" style={styles.companyName}>{company.name}</ThemedText>
-                    {company.status && (
-                      <View style={[styles.statusBadge, { backgroundColor: company.status === 'active' ? Colors.success[500] : Colors.error[500] }]}>
-                        <ThemedText style={styles.statusText}>{company.status_display || company.status}</ThemedText>
+                <Card
+                  variant="elevated"
+                  style={[
+                    styles.companyCard,
+                    isSelected && styles.companyCardSelected,
+                  ]}
+                >
+                  <View style={styles.companyCardContent}>
+                    <View style={styles.radioContainer}>
+                      <View
+                        style={[
+                          styles.radio,
+                          isSelected && styles.radioSelected,
+                        ]}
+                      >
+                        {isSelected && (
+                          <View style={styles.radioInner} />
+                        )}
                       </View>
-                    )}
-                  </View>
-                  <MaterialIcons name="chevron-right" size={24} color={Colors.text.tertiary} />
-                </View>
+                    </View>
 
-                {company.email && (
-                  <View style={styles.detailRow}>
-                    <MaterialIcons name="email" size={16} color={Colors.text.secondary} />
-                    <ThemedText style={styles.detailText}>{company.email}</ThemedText>
-                  </View>
-                )}
+                    <View style={styles.companyInfoContainer}>
+                      <View style={styles.companyNameRow}>
+                        <ThemedText type="title" style={styles.companyName}>
+                          {company.name}
+                        </ThemedText>
+                        {isCurrent && (
+                          <View style={styles.currentBadge}>
+                            <MaterialIcons name="check-circle" size={16} color={Colors.primary[500]} />
+                            <ThemedText style={styles.currentText}>Current</ThemedText>
+                          </View>
+                        )}
+                      </View>
 
-                {company.user_count !== undefined && (
-                  <View style={styles.detailRow}>
-                    <MaterialIcons name="people" size={16} color={Colors.text.secondary} />
-                    <ThemedText style={styles.detailText}>{company.user_count} users</ThemedText>
-                  </View>
-                )}
+                      <View style={styles.companyDetails}>
+                        {company.plan_display && (
+                          <View style={styles.detailItem}>
+                            <ThemedText style={styles.detailLabel}>Plan:</ThemedText>
+                            <ThemedText style={styles.detailValue}>{company.plan_display}</ThemedText>
+                          </View>
+                        )}
+                        <View style={styles.detailItem}>
+                          <ThemedText style={styles.detailLabel}>Users:</ThemedText>
+                          <ThemedText style={styles.detailValue}>
+                            {company.user_count ?? company.stats?.total_users ?? 0}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    </View>
 
-                {currentCompany?.id === company.id && (
-                  <View style={styles.currentBadge}>
-                    <MaterialIcons name="check-circle" size={16} color={Colors.primary[500]} />
-                    <ThemedText style={styles.currentText}>Current Company</ThemedText>
+                    <MaterialIcons
+                      name="business"
+                      size={24}
+                      color={isSelected ? Colors.primary[500] : Colors.text.tertiary}
+                    />
                   </View>
-                )}
+                </Card>
               </TouchableOpacity>
-            </Card>
-          ))
+            );
+          })
         )}
       </ScrollView>
+
+      {/* Select Company Button */}
+      {isSuperAdmin && companies.length > 0 && (
+        <View style={styles.footer}>
+          <TouchableOpacity
+            onPress={handleSelectCompany}
+            disabled={!selectedCompanyId || switching || selectedCompanyId === currentCompany?.id}
+            style={[
+              styles.selectButton,
+              (!selectedCompanyId || switching || selectedCompanyId === currentCompany?.id) && styles.selectButtonDisabled,
+            ]}
+            activeOpacity={0.7}
+          >
+            {switching ? (
+              <ActivityIndicator size="small" color={Colors.background.light} />
+            ) : (
+              <>
+                <MaterialIcons name="check-circle" size={20} color={Colors.background.light} />
+                <ThemedText style={styles.selectButtonText}>Select Company</ThemedText>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -234,34 +307,136 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     color: Colors.text.secondary,
   },
-  searchContainer: {
+  header: {
+    backgroundColor: Colors.background.light,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background.light,
-    margin: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.gray[300],
+    gap: Spacing.sm,
   },
-  searchIcon: {
-    marginRight: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: Typography.fontSize.base,
+  pageTitle: {
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: '700',
     color: Colors.text.primary,
   },
-  clearButton: {
-    padding: Spacing.xs,
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary[50],
+    padding: Spacing.md,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    borderRadius: 8,
+    gap: Spacing.sm,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+    color: Colors.primary[700],
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
   },
-  companyCard: {
-    margin: Spacing.md,
+  scrollContent: {
     padding: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginBottom: Spacing.md,
+  },
+  companyCard: {
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+  },
+  companyCardSelected: {
+    borderColor: Colors.primary[500],
+    borderWidth: 2,
+    backgroundColor: Colors.primary[50],
+  },
+  companyCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  radioContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.gray[400],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioSelected: {
+    borderColor: Colors.primary[500],
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.primary[500],
+  },
+  companyInfoContainer: {
+    flex: 1,
+  },
+  companyNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+    flexWrap: 'wrap',
+  },
+  companyName: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  currentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary[100],
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  currentText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.primary[600],
+    fontWeight: '600',
+  },
+  companyDetails: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    flexWrap: 'wrap',
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  detailLabel: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.secondary,
+  },
+  detailValue: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.text.primary,
+    fontWeight: '600',
   },
   companyHeader: {
     flexDirection: 'row',
@@ -274,11 +449,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-  },
-  companyName: {
-    fontSize: Typography.fontSize['2xl'],
-    fontWeight: '600',
-    color: Colors.text.primary,
   },
   statusBadge: {
     paddingHorizontal: Spacing.sm,
@@ -299,17 +469,6 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: Typography.fontSize.base,
     color: Colors.text.secondary,
-  },
-  currentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  currentText: {
-    fontSize: Typography.fontSize.sm,
-    color: Colors.primary[500],
-    fontWeight: '600',
   },
   detailsButton: {
     padding: Spacing.xs,
@@ -349,7 +508,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   emptyCard: {
-    margin: Spacing.md,
     padding: Spacing.xl,
     alignItems: 'center',
   },
@@ -358,6 +516,29 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.base,
     color: Colors.text.secondary,
     textAlign: 'center',
+  },
+  footer: {
+    padding: Spacing.md,
+    backgroundColor: Colors.background.light,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray[200],
+  },
+  selectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.primary[500],
+    borderRadius: 8,
+  },
+  selectButtonDisabled: {
+    opacity: 0.5,
+  },
+  selectButtonText: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: '600',
+    color: Colors.background.light,
   },
   refreshButton: {
     flexDirection: 'row',

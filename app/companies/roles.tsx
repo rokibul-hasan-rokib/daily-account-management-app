@@ -3,9 +3,9 @@
  * Lists all roles in the current company
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
@@ -14,8 +14,10 @@ import { useRoles } from '@/contexts/roles-context';
 import { Role } from '@/services/api/types';
 
 export default function CompanyRolesScreen() {
+  const router = useRouter();
   const { roles, isLoading, loadRoles, deleteRole } = useRoles();
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -23,17 +25,35 @@ export default function CompanyRolesScreen() {
     }, [loadRoles])
   );
 
-  const filteredRoles = useMemo(() => {
-    if (!searchQuery.trim()) return roles;
-    const query = searchQuery.toLowerCase();
-    return roles.filter(
-      role =>
-        role.name.toLowerCase().includes(query) ||
-        role.description?.toLowerCase().includes(query)
-    );
-  }, [roles, searchQuery]);
+  // Server-side search with debounce
+  React.useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
 
-  const handleDeleteRole = async (id: number, name: string) => {
+    const timeout = setTimeout(() => {
+      if (searchQuery.trim()) {
+        loadRoles({ search: searchQuery, ordering: 'name' });
+      } else {
+        loadRoles({ ordering: 'name' });
+      }
+    }, 500);
+
+    setSearchTimeout(timeout);
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [searchQuery]);
+
+  const filteredRoles = roles; // No client-side filtering needed, API handles it
+
+  const handleDeleteRole = async (id: number, name: string, isSystem: boolean) => {
+    if (isSystem) {
+      Alert.alert('Error', 'System roles cannot be deleted');
+      return;
+    }
+
     Alert.alert(
       'Delete Role',
       `Are you sure you want to delete "${name}"? This action cannot be undone.`,
@@ -48,7 +68,12 @@ export default function CompanyRolesScreen() {
               Alert.alert('Success', 'Role deleted successfully');
             } catch (error: any) {
               console.error('Error deleting role:', error);
-              Alert.alert('Error', error.message || 'Failed to delete role');
+              const errorMessage = error.message || 'Failed to delete role';
+              if (errorMessage.includes('system') || errorMessage.includes('System')) {
+                Alert.alert('Error', 'System roles cannot be deleted');
+              } else {
+                Alert.alert('Error', errorMessage);
+              }
             }
           },
         },
@@ -67,6 +92,19 @@ export default function CompanyRolesScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <MaterialIcons name="admin-panel-settings" size={24} color={Colors.primary[500]} />
+          <ThemedText type="title" style={styles.pageTitle}>Company Roles</ThemedText>
+        </View>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push('/companies/roles/add')}
+        >
+          <MaterialIcons name="add" size={24} color={Colors.background.light} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.searchContainer}>
         <MaterialIcons name="search" size={20} color={Colors.text.secondary} style={styles.searchIcon} />
         <TextInput
@@ -143,15 +181,24 @@ export default function CompanyRolesScreen() {
                 </View>
               )}
 
-              {!role.is_system && (
+              <View style={styles.roleActions}>
                 <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteRole(role.id, role.name)}
+                  style={styles.editButton}
+                  onPress={() => router.push(`/companies/roles/${role.id}`)}
                 >
-                  <MaterialIcons name="delete-outline" size={18} color={Colors.error[500]} />
-                  <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
+                  <MaterialIcons name="edit" size={18} color={Colors.primary[500]} />
+                  <ThemedText style={styles.editButtonText}>Edit</ThemedText>
                 </TouchableOpacity>
-              )}
+                {!role.is_system && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteRole(role.id, role.name, role.is_system || false)}
+                  >
+                    <MaterialIcons name="delete-outline" size={18} color={Colors.error[500]} />
+                    <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
+                  </TouchableOpacity>
+                )}
+              </View>
             </Card>
           ))
         )}
@@ -164,6 +211,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background.light,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  pageTitle: {
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary[500],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centerContainer: {
     flex: 1,
@@ -285,13 +359,27 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.base,
     color: Colors.text.secondary,
   },
-  deleteButton: {
+  roleActions: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: Spacing.md,
     marginTop: Spacing.sm,
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.gray[200],
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  editButtonText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.primary[500],
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.xs,
   },
   deleteButtonText: {
