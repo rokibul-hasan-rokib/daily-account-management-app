@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useDrawer } from '@/contexts/drawer-context';
+import { useCompany } from '@/contexts/company-context';
+import { CompanySwitcher } from './company-switcher';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SIDEBAR_WIDTH = Math.min(SCREEN_WIDTH * 0.85, 320);
@@ -88,6 +90,7 @@ const navItems: NavItem[] = [
 
 export function DrawerSidebar() {
   const { isOpen, closeDrawer } = useDrawer();
+  const { isSuperAdmin } = useCompany();
   const pathname = usePathname();
   const router = useRouter();
   const slideAnim = React.useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
@@ -159,6 +162,13 @@ export function DrawerSidebar() {
             </TouchableOpacity>
           </View>
 
+          {/* Company Switcher (Super Admin only) */}
+          {isSuperAdmin && (
+            <View style={styles.companySwitcherContainer}>
+              <CompanySwitcher onCompanySwitch={closeDrawer} />
+            </View>
+          )}
+
           {/* Section Title */}
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>FINANCE MANAGEMENT</Text>
@@ -190,6 +200,27 @@ export function DrawerSidebar() {
                 </TouchableOpacity>
               );
             })}
+            
+            {/* Companies Menu Item (Super Admin only) */}
+            {isSuperAdmin && (
+              <TouchableOpacity
+                style={[styles.navItem, isActive('/companies') && styles.navItemActive]}
+                onPress={() => handleNavigation('/companies')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.navItemContent}>
+                  <MaterialIcons
+                    name="business"
+                    size={24}
+                    color="#FFFFFF"
+                    style={styles.icon}
+                  />
+                  <Text style={[styles.navItemText, isActive('/companies') && styles.navItemTextActive]}>
+                    Companies
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </Animated.View>
       </View>
@@ -280,6 +311,11 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  companySwitcherContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    marginTop: 8,
   },
   sectionContainer: {
     paddingHorizontal: 20,

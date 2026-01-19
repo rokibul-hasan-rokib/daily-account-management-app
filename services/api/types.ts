@@ -455,3 +455,131 @@ export type ReceiptFormData = FormData | {
   total_amount?: string;
   tax_amount?: string;
 }
+
+// Company types
+export interface Company {
+  id: number;
+  name: string;
+  slug: string;
+  domain?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  logo?: string;
+  logo_url?: string;
+  status: 'active' | 'inactive' | 'suspended';
+  status_display?: string;
+  subscription_plan?: string;
+  plan_display?: string;
+  subscription_start?: string;
+  subscription_end?: string;
+  primary_color?: string;
+  secondary_color?: string;
+  max_users?: number;
+  max_storage_mb?: number;
+  features?: Record<string, any>;
+  user_count?: number;
+  stats?: CompanyStats;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CompanyStats {
+  total_users: number;
+  total_transactions: number;
+  total_liabilities: number;
+  total_receipts: number;
+  total_income: number;
+  total_expenses: number;
+  net_balance: number;
+}
+
+export interface CompanyRequest {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  subscription_plan?: string;
+  max_users?: number;
+  max_storage_mb?: number;
+}
+
+export interface CompanyListParams {
+  search?: string;
+  ordering?: 'name' | 'created_at' | 'status';
+  page?: number;
+  page_size?: number;
+}
+
+// Company User types
+export interface CompanyUser {
+  id: number;
+  company: number;
+  company_name?: string;
+  user: User;
+  role?: Role;
+  is_admin: boolean;
+  is_owner: boolean;
+  is_active: boolean;
+  joined_at?: string;
+}
+
+export interface CompanyUserRequest {
+  company: number;
+  user_id: number;
+  role_id?: number;
+  is_admin?: boolean;
+  is_owner?: boolean;
+}
+
+export interface CompanyUserListParams {
+  search?: string;
+  ordering?: 'joined_at' | 'created_at';
+  page?: number;
+  page_size?: number;
+}
+
+// Role types
+export interface Permission {
+  id: number;
+  name: string;
+  codename: string;
+  description?: string;
+  category: string;
+  created_at?: string;
+}
+
+export interface Role {
+  id: number;
+  company?: number;
+  company_name?: string;
+  name: string;
+  description?: string;
+  permissions?: Permission[];
+  is_default?: boolean;
+  is_system?: boolean;
+  user_count?: number;
+  created_at?: string;
+}
+
+export interface RoleRequest {
+  company: number;
+  name: string;
+  description?: string;
+  permission_ids?: number[];
+  is_default?: boolean;
+}
+
+export interface RoleListParams {
+  search?: string;
+  ordering?: 'name' | 'created_at';
+  page?: number;
+  page_size?: number;
+}
+
+export interface PermissionListParams {
+  search?: string;
+  ordering?: 'category' | 'name';
+  page?: number;
+  page_size?: number;
+}

@@ -14,6 +14,9 @@ import { LiabilitiesProvider } from '@/contexts/liabilities-context';
 import { RulesProvider } from '@/contexts/rules-context';
 import { AlertsProvider } from '@/contexts/alerts-context';
 import { ProfileProvider } from '@/contexts/profile-context';
+import { CompanyProvider } from '@/contexts/company-context';
+import { CompanyUsersProvider } from '@/contexts/company-users-context';
+import { RolesProvider } from '@/contexts/roles-context';
 import { DrawerSidebar } from '@/components/drawer-sidebar';
 
 export const unstable_settings = {
@@ -25,15 +28,18 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <CategoriesProvider>
-        <MerchantsProvider>
-          <TransactionsProvider>
-            <ReceiptsProvider>
-              <LiabilitiesProvider>
-                <RulesProvider>
-                  <AlertsProvider>
-                    <ProfileProvider>
-                      <DrawerProvider>
+      <CompanyProvider>
+        <CompanyUsersProvider>
+          <RolesProvider>
+            <CategoriesProvider>
+              <MerchantsProvider>
+                <TransactionsProvider>
+                  <ReceiptsProvider>
+                    <LiabilitiesProvider>
+                      <RulesProvider>
+                        <AlertsProvider>
+                          <ProfileProvider>
+                            <DrawerProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <Stack>
               <Stack.Screen name="splash" options={{ headerShown: false }} />
@@ -46,14 +52,17 @@ export default function RootLayout() {
             <StatusBar style="light" />
           </ThemeProvider>
         </DrawerProvider>
-                    </ProfileProvider>
-                  </AlertsProvider>
-                </RulesProvider>
-              </LiabilitiesProvider>
-            </ReceiptsProvider>
-        </TransactionsProvider>
-        </MerchantsProvider>
-      </CategoriesProvider>
-    </AuthProvider>
-  );
-}
+                            </ProfileProvider>
+                          </AlertsProvider>
+                        </RulesProvider>
+                      </LiabilitiesProvider>
+                    </ReceiptsProvider>
+                  </TransactionsProvider>
+                </MerchantsProvider>
+              </CategoriesProvider>
+            </RolesProvider>
+          </CompanyUsersProvider>
+        </CompanyProvider>
+      </AuthProvider>
+    );
+  }

@@ -21,3 +21,7 @@ export { BudgetsService } from './budgets.service';
 export { AlertsService } from './alerts.service';
 export { ProfileService } from './profile.service';
 export { AnalyticsService } from './analytics.service';
+export { CompaniesService } from './companies.service';
+export { CompanyUsersService } from './company-users.service';
+export { RolesService } from './roles.service';
+export { PermissionsService } from './permissions.service';
