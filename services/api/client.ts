@@ -187,11 +187,13 @@ class ApiClient {
 
   // For file uploads (FormData)
   async postFormData<T>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
+    // Don't set Content-Type header - let axios set it automatically with boundary
+    // Setting it manually prevents axios from adding the boundary parameter
     const response = await this.client.post<T>(url, formData, {
       ...config,
       headers: {
         ...config?.headers,
-        'Content-Type': 'multipart/form-data',
+        // Remove Content-Type - axios will set it with boundary automatically
       },
     });
     return response.data;

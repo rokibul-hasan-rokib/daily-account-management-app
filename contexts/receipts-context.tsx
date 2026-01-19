@@ -118,7 +118,7 @@ export function ReceiptsProvider({ children }: { children: ReactNode }) {
 
       // Fetch from API
       const response = await ReceiptsService.getReceipts(params);
-      const receiptsList = Array.isArray(response) ? response : response.results;
+      const receiptsList = response.results || [];
       
       setReceipts(receiptsList);
       await storeReceipts(receiptsList);

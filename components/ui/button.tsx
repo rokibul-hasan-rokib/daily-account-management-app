@@ -1,4 +1,4 @@
-import { BorderRadius, Colors, Spacing, Typography } from '@/constants/design-system';
+import { BorderRadius, Colors, Spacing, Typography, Shadows } from '@/constants/design-system';
 import React from 'react';
 import { StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle } from 'react-native';
 

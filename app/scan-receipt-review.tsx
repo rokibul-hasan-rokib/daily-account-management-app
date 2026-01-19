@@ -51,26 +51,45 @@ export default function ScanReceiptReviewScreen() {
   const loadReceipt = async () => {
     try {
       setIsLoading(true);
-      const receipt = await ReceiptsService.getReceiptById(receiptId!);
+      let receipt = await ReceiptsService.getReceiptById(receiptId!);
+      
+      // If receipt doesn't have items or extraction not done, trigger OCR
+      if (!receipt.items || receipt.items.length === 0 || !receipt.is_extracted) {
+        try {
+          const extractResponse = await ReceiptsService.extractReceipt(receiptId!);
+          if (extractResponse.receipt) {
+            receipt = extractResponse.receipt;
+          } else {
+            // If extraction is async, wait and reload
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            receipt = await ReceiptsService.getReceiptById(receiptId!);
+          }
+        } catch (extractError: any) {
+          console.warn('OCR extraction failed:', extractError);
+          // Continue with existing receipt data
+        }
+      }
       
       setExtractedData({
         vendor_name: receipt.vendor_name || '',
         receipt_date: receipt.receipt_date || new Date().toISOString().split('T')[0],
         total_amount: receipt.total_amount || '0.00',
         tax_amount: receipt.tax_amount || '0.00',
-        items: receipt.items.map(item => ({
-          id: item.id,
-          item_name: item.item_name,
-          quantity: parseFloat(item.quantity),
-          unit_price: parseFloat(item.unit_price),
-          total_price: parseFloat(item.total_price),
-          category: item.category,
-          product_code: item.product_code,
-        })),
+        items: receipt.items && receipt.items.length > 0 
+          ? receipt.items.map(item => ({
+              id: item.id,
+              item_name: item.item_name,
+              quantity: parseFloat(item.quantity),
+              unit_price: parseFloat(item.unit_price),
+              total_price: parseFloat(item.total_price),
+              category: item.category,
+              product_code: item.product_code,
+            }))
+          : [],
       });
     } catch (error: any) {
       console.error('Error loading receipt:', error);
-      Alert.alert('Error', 'Failed to load receipt data.');
+      Alert.alert('Error', error.message || 'Failed to load receipt data.');
     } finally {
       setIsLoading(false);
     }

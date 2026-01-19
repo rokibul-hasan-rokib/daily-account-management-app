@@ -17,17 +17,21 @@ import {
 export class ReceiptsService {
   /**
    * Get list of receipts
+   * GET /api/receipts/
+   * Query Parameters: search, ordering (receipt_date, created_at)
    */
   static async getReceipts(
     params?: ReceiptListParams
-  ): Promise<Receipt[] | PaginatedResponse<Receipt>> {
-    return await apiClient.get<Receipt[] | PaginatedResponse<Receipt>>(
+  ): Promise<PaginatedResponse<Receipt>> {
+    return await apiClient.get<PaginatedResponse<Receipt>>(
       API_ENDPOINTS.RECEIPTS.LIST(params)
     );
   }
 
   /**
    * Get receipt by ID (includes items)
+   * GET /api/receipts/{id}/
+   * Response includes items array
    */
   static async getReceiptById(id: number): Promise<Receipt> {
     return await apiClient.get<Receipt>(API_ENDPOINTS.RECEIPTS.DETAIL(id));
@@ -35,6 +39,7 @@ export class ReceiptsService {
 
   /**
    * Upload receipt with image (auto OCR)
+   * POST /api/receipts/upload/
    */
   static async uploadReceipt(data: ReceiptRequest | FormData): Promise<ReceiptUploadResponse> {
     // If FormData is passed directly (for image upload)
@@ -66,7 +71,18 @@ export class ReceiptsService {
       
       // Append items if provided
       if (data.items && data.items.length > 0) {
-        formData.append('items', JSON.stringify(data.items));
+        data.items.forEach((item, index) => {
+          formData.append(`items[${index}][item_name]`, item.item_name);
+          formData.append(`items[${index}][quantity]`, item.quantity);
+          formData.append(`items[${index}][unit_price]`, item.unit_price);
+          formData.append(`items[${index}][total_price]`, item.total_price);
+          if (item.category) {
+            formData.append(`items[${index}][category]`, item.category.toString());
+          }
+          if (item.product_code) {
+            formData.append(`items[${index}][product_code]`, item.product_code);
+          }
+        });
       }
       
       return await apiClient.postFormData<ReceiptUploadResponse>(
@@ -79,7 +95,8 @@ export class ReceiptsService {
   }
 
   /**
-   * Create a new receipt (without auto OCR)
+   * Create a new receipt (with items support)
+   * POST /api/receipts/
    */
   static async createReceipt(data: ReceiptRequest | FormData): Promise<Receipt> {
     // If FormData is passed directly
@@ -109,9 +126,21 @@ export class ReceiptsService {
         formData.append('tax_amount', data.tax_amount);
       }
       
-      // Append items if provided
+      // Append items if provided - API expects items array
       if (data.items && data.items.length > 0) {
-        formData.append('items', JSON.stringify(data.items));
+        // For FormData, we need to append each item separately or as JSON
+        data.items.forEach((item, index) => {
+          formData.append(`items[${index}][item_name]`, item.item_name);
+          formData.append(`items[${index}][quantity]`, item.quantity);
+          formData.append(`items[${index}][unit_price]`, item.unit_price);
+          formData.append(`items[${index}][total_price]`, item.total_price);
+          if (item.category) {
+            formData.append(`items[${index}][category]`, item.category.toString());
+          }
+          if (item.product_code) {
+            formData.append(`items[${index}][product_code]`, item.product_code);
+          }
+        });
       }
       
       return await apiClient.postFormData<Receipt>(
@@ -120,7 +149,7 @@ export class ReceiptsService {
       );
     }
     
-    // Regular JSON request (without image)
+    // Regular JSON request (with items array)
     return await apiClient.post<Receipt>(
       API_ENDPOINTS.RECEIPTS.CREATE,
       data
@@ -149,6 +178,8 @@ export class ReceiptsService {
 
   /**
    * Extract receipt data using OCR
+   * POST /api/receipts/{id}/extract/
+   * Triggers OCR extraction for receipt
    */
   static async extractReceipt(id: number): Promise<ReceiptExtractResponse> {
     return await apiClient.post<ReceiptExtractResponse>(

@@ -8,11 +8,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useReceipts } from '@/contexts/receipts-context';
 import { ReceiptsService } from '@/services/api';
 
 export default function ScanReceiptScreen() {
-  const { createReceipt } = useReceipts();
   const [image, setImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -91,19 +89,99 @@ export default function ScanReceiptScreen() {
       // Create FormData for image upload
       const formData = new FormData();
       
-      // For React Native, we need to handle the image URI differently
-      const imageUriParts = image.split('/');
-      const imageName = imageUriParts[imageUriParts.length - 1] || 'receipt.jpg';
+      // Handle image URI differently for web vs native
+      let imageUri = image;
+      let imageFile: any;
+      
+      if (Platform.OS === 'web') {
+        // For web, we need to convert the URI to a File/Blob
+        // Fetch the image and convert to blob
+        const response = await fetch(image);
+        const blob = await response.blob();
+        const imageName = image.split('/').pop() || 'receipt.jpg';
+        imageFile = new File([blob], imageName, { type: blob.type || 'image/jpeg' });
+      } else {
+        // For React Native (iOS/Android), keep the URI format
+        // iOS: Keep file:// prefix
+        // Android: Keep as is (can be file:// or content://)
+        if (Platform.OS === 'ios' && !imageUri.startsWith('file://')) {
+          imageUri = `file://${imageUri}`;
+        }
+        
+        // Get image name from URI
+        const imageUriParts = image.split('/');
+        const imageName = imageUriParts[imageUriParts.length - 1] || 'receipt.jpg';
+        
+        // Determine image type
+        let imageType = 'image/jpeg';
+        if (imageName.toLowerCase().endsWith('.png')) {
+          imageType = 'image/png';
+        } else if (imageName.toLowerCase().endsWith('.jpg') || imageName.toLowerCase().endsWith('.jpeg')) {
+          imageType = 'image/jpeg';
+        }
+        
+        // React Native FormData format
+        imageFile = {
+          uri: imageUri,
+          type: imageType,
+          name: imageName,
+        };
+      }
       
       // Append image file
-      formData.append('image', {
-        uri: Platform.OS === 'ios' ? image.replace('file://', '') : image,
-        type: 'image/jpeg',
-        name: imageName,
-      } as any);
+      formData.append('image', imageFile as any);
+      
+      // Add required total_amount field (will be updated after OCR extraction)
+      // Set to "0.00" as placeholder since OCR will extract the actual amount
+      formData.append('total_amount', '0.00');
 
-      // Upload receipt with OCR extraction
-      const response = await ReceiptsService.uploadReceipt(formData);
+      console.log('Uploading receipt with image:', { imageUri, imageName, imageType });
+
+      // Step 1: Try upload endpoint first (handles image + OCR)
+      let receipt: any;
+      try {
+        const uploadResponse = await ReceiptsService.uploadReceipt(formData);
+        // uploadReceipt returns ReceiptUploadResponse which has receipt property
+        receipt = uploadResponse.receipt || uploadResponse;
+        console.log('Receipt uploaded:', receipt?.id, 'Items:', receipt?.items?.length || 0);
+      } catch (uploadError: any) {
+        console.log('Upload endpoint failed, trying create endpoint:', uploadError.response?.data || uploadError.message);
+        // Fallback to create endpoint
+        receipt = await ReceiptsService.createReceipt(formData);
+        console.log('Receipt created:', receipt?.id, 'Items:', receipt?.items?.length || 0);
+      }
+      
+      if (!receipt || !receipt.id) {
+        throw new Error('Failed to create receipt. Please try again.');
+      }
+      
+      // Step 2: Trigger OCR extraction if needed
+      let finalReceipt = receipt;
+      if (!receipt.items || receipt.items.length === 0 || !receipt.is_extracted) {
+        try {
+          console.log('Triggering OCR extraction for receipt:', receipt.id);
+          // Trigger OCR extraction
+          const extractResponse = await ReceiptsService.extractReceipt(receipt.id);
+          console.log('Extract response:', extractResponse);
+          
+          // Wait a bit for OCR processing (if async)
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Reload receipt to get extracted items
+          finalReceipt = await ReceiptsService.getReceiptById(receipt.id);
+          console.log('Receipt after extraction:', finalReceipt.items?.length || 0, 'items');
+          
+          // If still no items, try one more time after delay
+          if ((!finalReceipt.items || finalReceipt.items.length === 0) && extractResponse.extracted) {
+            console.log('Retrying receipt load after extraction...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            finalReceipt = await ReceiptsService.getReceiptById(receipt.id);
+          }
+        } catch (extractError: any) {
+          console.warn('OCR extraction error, will retry on review screen:', extractError);
+          // Continue - extraction will be retried on review screen
+        }
+      }
       
       setIsProcessing(false);
       
@@ -111,16 +189,18 @@ export default function ScanReceiptScreen() {
       router.push({
         pathname: '/scan-receipt-review',
         params: { 
-          receiptId: response.receipt.id.toString(),
+          receiptId: finalReceipt.id.toString(),
           imageUri: image,
         },
       });
     } catch (error: any) {
       setIsProcessing(false);
       console.error('Error processing receipt:', error);
+      console.error('Error details:', error.response?.data);
+      const errorMessage = error.response?.data?.detail || error.response?.data?.error || error.message || 'Failed to process receipt. Please try again.';
       Alert.alert(
         'Error',
-        error.message || 'Failed to process receipt. Please try again.',
+        errorMessage,
         [{ text: 'OK' }]
       );
     }

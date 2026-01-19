@@ -17,11 +17,13 @@ import {
 export class ReceiptItemsService {
   /**
    * Get list of receipt items
+   * GET /api/receipt-items/
+   * Query Parameters: search, start_date, end_date, ordering (item_name, total_price, created_at)
    */
   static async getReceiptItems(
     params?: ReceiptItemListParams
-  ): Promise<ReceiptItem[] | PaginatedResponse<ReceiptItem>> {
-    return await apiClient.get<ReceiptItem[] | PaginatedResponse<ReceiptItem>>(
+  ): Promise<PaginatedResponse<ReceiptItem>> {
+    return await apiClient.get<PaginatedResponse<ReceiptItem>>(
       API_ENDPOINTS.RECEIPT_ITEMS.LIST(params)
     );
   }
