@@ -34,12 +34,16 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.background.card,
     borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
   },
   elevated: {
-    ...Shadows.lg,
+    ...Shadows.card,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
   },
   outlined: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.gray[200],
+    backgroundColor: Colors.background.light,
   },
 });

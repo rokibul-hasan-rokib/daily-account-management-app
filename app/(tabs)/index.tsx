@@ -279,13 +279,17 @@ const styles = StyleSheet.create({
   },
   periodButton: {
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
     borderRadius: 20,
     backgroundColor: Colors.background.light,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
     ...Shadows.sm,
   },
   periodButtonActive: {
     backgroundColor: Colors.primary[500],
+    borderColor: Colors.primary[600],
+    ...Shadows.md,
   },
   periodButtonText: {
     fontSize: Typography.fontSize.sm,
@@ -315,6 +319,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '45%',
     padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
   },
   metricHeader: {
     flexDirection: 'row',

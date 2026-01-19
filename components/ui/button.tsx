@@ -59,9 +59,12 @@ const styles = StyleSheet.create({
   // Variants
   primary: {
     backgroundColor: Colors.primary[500],
+    ...Shadows.button,
   },
   secondary: {
     backgroundColor: Colors.gray[100],
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
   },
   outline: {
     backgroundColor: 'transparent',
