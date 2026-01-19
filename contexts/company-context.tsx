@@ -132,53 +132,57 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   // Load company details with stats
   const loadCompanyDetails = useCallback(async (companyId: number) => {
     try {
-      const company = await CompaniesService.getCompanyDetails(companyId);
-      setCurrentCompany(company);
-      await setStoredCompanyId(companyId);
-      
-      // Update in companies list
-      setCompanies(prev => prev.map(c => c.id === companyId ? company : c));
+      // Try to get company from list first (faster)
+      const existingCompany = companies.find(c => c.id === companyId);
+      if (existingCompany && !existingCompany.stats) {
+        // We have basic info but need details with stats
+        const company = await CompaniesService.getCompanyDetails(companyId);
+        setCurrentCompany(company);
+        await setStoredCompanyId(companyId);
+        // Update in companies list
+        setCompanies(prev => prev.map(c => c.id === companyId ? company : c));
+      } else if (existingCompany) {
+        // Already have full details
+        setCurrentCompany(existingCompany);
+        await setStoredCompanyId(companyId);
+      } else {
+        // Company not in list, fetch it
+        const company = await CompaniesService.getCompanyDetails(companyId);
+        setCurrentCompany(company);
+        await setStoredCompanyId(companyId);
+        // Add to companies list if not already there
+        setCompanies(prev => {
+          const exists = prev.find(c => c.id === companyId);
+          if (!exists) {
+            return [...prev, company];
+          }
+          return prev.map(c => c.id === companyId ? company : c);
+        });
+      }
     } catch (error) {
       console.error('Error loading company details:', error);
       // Fallback to basic company info
-      setCompanies(prev => {
-        const company = prev.find(c => c.id === companyId);
-        if (company) {
-          setCurrentCompany(company);
-          setStoredCompanyId(companyId);
-        }
-        return prev;
-      });
+      const existingCompany = companies.find(c => c.id === companyId);
+      if (existingCompany) {
+        setCurrentCompany(existingCompany);
+        await setStoredCompanyId(companyId);
+      }
     }
-  }, []);
+  }, [companies]);
 
   // Load companies from API
   const loadCompanies = useCallback(async () => {
     try {
       setIsLoading(true);
       
-      // Try cache first
+      // Show cached data immediately for better UX
       const cached = await getCachedCompanies();
       if (cached && cached.length > 0) {
         setCompanies(cached);
         setIsSuperAdmin(cached.length > 1);
-        
-        // Load current company if we have cached companies
-        const storedId = await getStoredCompanyId();
-        if (storedId) {
-          const company = cached.find(c => c.id === storedId);
-          if (company) {
-            await loadCompanyDetails(company.id);
-            return;
-          }
-        } else if (cached.length === 1) {
-          // If only one company, select it automatically
-          await loadCompanyDetails(cached[0].id);
-          return;
-        }
       }
 
-      // Fetch from API
+      // Always fetch fresh data from API
       const response = await CompaniesService.getCompanies();
       const fetchedCompanies = response.results || [];
       
@@ -188,23 +192,36 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       // Determine if super admin (can see multiple companies)
       setIsSuperAdmin(fetchedCompanies.length > 1);
 
-      // Load current company
+      // Load current company (don't await to avoid blocking)
       const storedId = await getStoredCompanyId();
       if (storedId) {
         const company = fetchedCompanies.find(c => c.id === storedId);
         if (company) {
-          await loadCompanyDetails(company.id);
+          // Load details in background, don't block
+          loadCompanyDetails(company.id).catch(err => {
+            console.error('Error loading company details:', err);
+          });
         } else if (fetchedCompanies.length > 0) {
           // Stored company not found, select first one
-          await loadCompanyDetails(fetchedCompanies[0].id);
+          loadCompanyDetails(fetchedCompanies[0].id).catch(err => {
+            console.error('Error loading company details:', err);
+          });
+        } else {
+          setCurrentCompany(null);
         }
       } else if (fetchedCompanies.length === 1) {
         // Only one company, select it automatically
-        await loadCompanyDetails(fetchedCompanies[0].id);
+        loadCompanyDetails(fetchedCompanies[0].id).catch(err => {
+          console.error('Error loading company details:', err);
+        });
       } else if (fetchedCompanies.length > 1) {
-        // Multiple companies but no selection - let user choose
-        // For now, select first one
-        await loadCompanyDetails(fetchedCompanies[0].id);
+        // Multiple companies but no selection - select first one
+        loadCompanyDetails(fetchedCompanies[0].id).catch(err => {
+          console.error('Error loading company details:', err);
+        });
+      } else if (fetchedCompanies.length === 0) {
+        // No companies found
+        setCurrentCompany(null);
       }
     } catch (error: any) {
       console.error('Error loading companies:', error);
@@ -212,13 +229,22 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const cached = await getCachedCompanies();
       if (cached && cached.length > 0) {
         setCompanies(cached);
+        setIsSuperAdmin(cached.length > 1);
         const storedId = await getStoredCompanyId();
         if (storedId) {
           const company = cached.find(c => c.id === storedId);
           if (company) {
             setCurrentCompany(company);
+          } else if (cached.length === 1) {
+            setCurrentCompany(cached[0]);
           }
+        } else if (cached.length === 1) {
+          setCurrentCompany(cached[0]);
         }
+      } else {
+        // No cache, clear everything
+        setCompanies([]);
+        setCurrentCompany(null);
       }
     } finally {
       setIsLoading(false);

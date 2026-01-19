@@ -167,7 +167,7 @@ export default function CompanyDetailsScreen() {
       <View style={styles.actionsContainer}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => router.push(`/companies/users?companyId=${company.id}`)}
+          onPress={() => router.push('/companies/users')}
         >
           <MaterialIcons name="people" size={20} color={Colors.primary[500]} />
           <ThemedText style={styles.actionButtonText}>View Users</ThemedText>
@@ -175,7 +175,7 @@ export default function CompanyDetailsScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => router.push(`/companies/roles?companyId=${company.id}`)}
+          onPress={() => router.push('/companies/roles')}
         >
           <MaterialIcons name="admin-panel-settings" size={20} color={Colors.primary[500]} />
           <ThemedText style={styles.actionButtonText}>View Roles</ThemedText>

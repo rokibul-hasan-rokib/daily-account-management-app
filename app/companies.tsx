@@ -17,7 +17,9 @@ import { Company } from '@/services/api/types';
 export default function CompaniesScreen() {
   const { companies, currentCompany, isLoading, isSuperAdmin, loadCompanies, switchCompany } = useCompany();
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Load companies when screen is focused
   useFocusEffect(
     useCallback(() => {
       loadCompanies();
@@ -59,6 +61,23 @@ export default function CompaniesScreen() {
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={Colors.primary[500]} />
         <ThemedText style={styles.loadingText}>Loading companies...</ThemedText>
+      </View>
+    );
+  }
+
+  // Show empty state if no companies and not loading
+  if (!isLoading && companies.length === 0 && !currentCompany) {
+    return (
+      <View style={styles.centerContainer}>
+        <MaterialIcons name="business" size={48} color={Colors.text.tertiary} />
+        <ThemedText style={styles.emptyText}>No companies found</ThemedText>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => loadCompanies()}
+        >
+          <MaterialIcons name="refresh" size={20} color={Colors.primary[500]} />
+          <ThemedText style={styles.refreshButtonText}>Refresh</ThemedText>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -338,5 +357,21 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     fontSize: Typography.fontSize.base,
     color: Colors.text.secondary,
+    textAlign: 'center',
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.primary[50],
+    borderRadius: 8,
+    gap: Spacing.sm,
+  },
+  refreshButtonText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.primary[500],
+    fontWeight: '600',
   },
 });

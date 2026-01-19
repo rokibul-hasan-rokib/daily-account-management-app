@@ -86,6 +86,11 @@ const navItems: NavItem[] = [
     icon: 'settings',
     href: '/settings',
   },
+  {
+    title: 'Company',
+    icon: 'business',
+    href: '/companies',
+  },
 ];
 
 export function DrawerSidebar() {
@@ -200,27 +205,6 @@ export function DrawerSidebar() {
                 </TouchableOpacity>
               );
             })}
-            
-            {/* Companies Menu Item (Super Admin only) */}
-            {isSuperAdmin && (
-              <TouchableOpacity
-                style={[styles.navItem, isActive('/companies') && styles.navItemActive]}
-                onPress={() => handleNavigation('/companies')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.navItemContent}>
-                  <MaterialIcons
-                    name="business"
-                    size={24}
-                    color="#FFFFFF"
-                    style={styles.icon}
-                  />
-                  <Text style={[styles.navItemText, isActive('/companies') && styles.navItemTextActive]}>
-                    Companies
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
           </ScrollView>
         </Animated.View>
       </View>

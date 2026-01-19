@@ -11,6 +11,6 @@ export class PermissionsService {
    * List all permissions
    */
   static async getPermissions(params?: PermissionListParams): Promise<PaginatedResponse<Permission>> {
-    return apiClient.get<PaginatedResponse<Permission>>('/api/permissions/', { params });
+    return apiClient.get<PaginatedResponse<Permission>>('/permissions/', { params });
   }
 }
