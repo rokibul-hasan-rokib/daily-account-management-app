@@ -41,8 +41,8 @@ export default function ScanReceiptScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'], // Use array format for expo-image-picker v17
-        allowsEditing: true,
-        aspect: [4, 3],
+        // Disable built-in cropping so full invoice is kept
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -68,8 +68,8 @@ export default function ScanReceiptScreen() {
 
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'], // Use array format for expo-image-picker v17
-        allowsEditing: true,
-        aspect: [4, 3],
+        // Disable built-in cropping so full invoice is kept
+        allowsEditing: false,
         quality: 0.8,
       });
 
