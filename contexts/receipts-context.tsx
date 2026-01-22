@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { ReceiptsService } from '@/services/api';
 import { Receipt, ReceiptListParams } from '@/services/api/types';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 interface ReceiptsContextType {
@@ -47,8 +47,9 @@ async function getStoredReceipts(): Promise<Receipt[] | null> {
       }
       return null;
     } else {
-      const cached = await SecureStore.getItemAsync(STORAGE_KEY);
-      const expiry = await SecureStore.getItemAsync(CACHE_EXPIRY_KEY);
+      // Use AsyncStorage for large data (not SecureStore - SecureStore has 2048 byte limit)
+      const cached = await AsyncStorage.getItem(STORAGE_KEY);
+      const expiry = await AsyncStorage.getItem(CACHE_EXPIRY_KEY);
       
       if (cached && expiry) {
         const expiryTime = parseInt(expiry, 10);
@@ -73,8 +74,9 @@ async function storeReceipts(receipts: Receipt[]): Promise<void> {
       localStorage.setItem(STORAGE_KEY, data);
       localStorage.setItem(CACHE_EXPIRY_KEY, expiry.toString());
     } else {
-      await SecureStore.setItemAsync(STORAGE_KEY, data);
-      await SecureStore.setItemAsync(CACHE_EXPIRY_KEY, expiry.toString());
+      // Use AsyncStorage for large data (not SecureStore - SecureStore has 2048 byte limit)
+      await AsyncStorage.setItem(STORAGE_KEY, data);
+      await AsyncStorage.setItem(CACHE_EXPIRY_KEY, expiry.toString());
     }
   } catch (error) {
     console.warn('Error storing cached receipts:', error);
@@ -88,8 +90,9 @@ async function clearCachedReceipts(): Promise<void> {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(CACHE_EXPIRY_KEY);
     } else {
-      await SecureStore.deleteItemAsync(STORAGE_KEY);
-      await SecureStore.deleteItemAsync(CACHE_EXPIRY_KEY);
+      // Use AsyncStorage for large data (not SecureStore)
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      await AsyncStorage.removeItem(CACHE_EXPIRY_KEY);
     }
   } catch (error) {
     console.warn('Error clearing cached receipts:', error);

@@ -40,7 +40,7 @@ export default function ScanReceiptScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'], // Use array format for expo-image-picker v17
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -67,6 +67,7 @@ export default function ScanReceiptScreen() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'], // Use array format for expo-image-picker v17
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -90,7 +91,6 @@ export default function ScanReceiptScreen() {
       const formData = new FormData();
       
       // Handle image URI differently for web vs native
-      let imageUri = image;
       let imageFile: any;
       
       if (Platform.OS === 'web') {
@@ -99,56 +99,71 @@ export default function ScanReceiptScreen() {
         const response = await fetch(image);
         const blob = await response.blob();
         const imageName = image.split('/').pop() || 'receipt.jpg';
-        imageFile = new File([blob], imageName, { type: blob.type || 'image/jpeg' });
+        const imageType = blob.type || 'image/jpeg';
+        imageFile = new File([blob], imageName, { type: imageType });
+        formData.append('image', imageFile);
       } else {
-        // For React Native (iOS/Android), keep the URI format
-        // iOS: Keep file:// prefix
-        // Android: Keep as is (can be file:// or content://)
-        if (Platform.OS === 'ios' && !imageUri.startsWith('file://')) {
-          imageUri = `file://${imageUri}`;
-        }
+        // For React Native (iOS/Android), use the URI directly from expo-image-picker
+        // expo-image-picker already provides the correct URI format:
+        // - iOS: file:///path/to/image
+        // - Android: file:///path/to/image or content://...
+        // DO NOT modify the URI - use it exactly as provided
         
         // Get image name from URI
         const imageUriParts = image.split('/');
         const imageName = imageUriParts[imageUriParts.length - 1] || 'receipt.jpg';
         
-        // Determine image type
+        // Determine image type from extension
         let imageType = 'image/jpeg';
-        if (imageName.toLowerCase().endsWith('.png')) {
+        const lowerName = imageName.toLowerCase();
+        if (lowerName.endsWith('.png')) {
           imageType = 'image/png';
-        } else if (imageName.toLowerCase().endsWith('.jpg') || imageName.toLowerCase().endsWith('.jpeg')) {
+        } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
           imageType = 'image/jpeg';
         }
         
-        // React Native FormData format
-        imageFile = {
-          uri: imageUri,
+        // React Native FormData format - use URI exactly as provided
+        // The object structure must match exactly what React Native expects
+        formData.append('image', {
+          uri: image, // Use original URI without modification
           type: imageType,
           name: imageName,
-        };
+        } as any);
       }
-      
-      // Append image file
-      formData.append('image', imageFile as any);
       
       // Add required total_amount field (will be updated after OCR extraction)
       // Set to "0.00" as placeholder since OCR will extract the actual amount
       formData.append('total_amount', '0.00');
 
-      console.log('Uploading receipt with image:', { imageUri, imageName, imageType });
+      console.log('Uploading receipt with image:', { 
+        platform: Platform.OS,
+        imageUri: image,
+        imageFile: Platform.OS === 'web' ? { name: imageFile.name, type: imageFile.type } : 'FormData object'
+      });
 
-      // Step 1: Try upload endpoint first (handles image + OCR)
+      // Step 1: Try upload endpoint first (handles image + auto OCR)
+      // According to API docs, upload endpoint automatically runs OCR
       let receipt: any;
+      let needsExtraction = false;
+      
       try {
         const uploadResponse = await ReceiptsService.uploadReceipt(formData);
         // uploadReceipt returns ReceiptUploadResponse which has receipt property
         receipt = uploadResponse.receipt || uploadResponse;
-        console.log('Receipt uploaded:', receipt?.id, 'Items:', receipt?.items?.length || 0);
+        console.log('Receipt uploaded:', receipt?.id, 'Items:', receipt?.items?.length || 0, 'Extracted:', receipt?.is_extracted);
+        
+        // Check if OCR was successful
+        if (uploadResponse.extracted && receipt?.items && receipt.items.length > 0) {
+          console.log('OCR completed automatically via upload endpoint. Confidence:', uploadResponse.confidence);
+        } else {
+          needsExtraction = true;
+        }
       } catch (uploadError: any) {
         console.log('Upload endpoint failed, trying create endpoint:', uploadError.response?.data || uploadError.message);
-        // Fallback to create endpoint
+        // Fallback to create endpoint (doesn't auto-run OCR)
         receipt = await ReceiptsService.createReceipt(formData);
         console.log('Receipt created:', receipt?.id, 'Items:', receipt?.items?.length || 0);
+        needsExtraction = true; // Create endpoint doesn't auto-extract
       }
       
       if (!receipt || !receipt.id) {
@@ -156,26 +171,38 @@ export default function ScanReceiptScreen() {
       }
       
       // Step 2: Trigger OCR extraction if needed
+      // POST /api/receipts/{id}/extract/ - Uses Google Cloud Vision API with fallbacks
       let finalReceipt = receipt;
-      if (!receipt.items || receipt.items.length === 0 || !receipt.is_extracted) {
+      if (needsExtraction || !receipt.items || receipt.items.length === 0 || !receipt.is_extracted) {
         try {
           console.log('Triggering OCR extraction for receipt:', receipt.id);
-          // Trigger OCR extraction
+          // Trigger OCR extraction (Google Cloud Vision API with fallbacks)
           const extractResponse = await ReceiptsService.extractReceipt(receipt.id);
-          console.log('Extract response:', extractResponse);
+          console.log('Extract response:', {
+            message: extractResponse.message,
+            confidence: extractResponse.confidence,
+            items_extracted: extractResponse.items_extracted,
+            extracted: extractResponse.extracted
+          });
           
-          // Wait a bit for OCR processing (if async)
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          
-          // Reload receipt to get extracted items
-          finalReceipt = await ReceiptsService.getReceiptById(receipt.id);
-          console.log('Receipt after extraction:', finalReceipt.items?.length || 0, 'items');
-          
-          // If still no items, try one more time after delay
-          if ((!finalReceipt.items || finalReceipt.items.length === 0) && extractResponse.extracted) {
-            console.log('Retrying receipt load after extraction...');
+          // Use receipt from extract response if available, otherwise reload
+          if (extractResponse.receipt) {
+            finalReceipt = extractResponse.receipt;
+            console.log('Using receipt from extract response:', finalReceipt.items?.length || 0, 'items');
+          } else {
+            // Wait a bit for OCR processing (if async)
             await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Reload receipt to get extracted items
             finalReceipt = await ReceiptsService.getReceiptById(receipt.id);
+            console.log('Receipt after extraction:', finalReceipt.items?.length || 0, 'items');
+            
+            // If still no items, try one more time after delay
+            if ((!finalReceipt.items || finalReceipt.items.length === 0) && extractResponse.extracted) {
+              console.log('Retrying receipt load after extraction...');
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              finalReceipt = await ReceiptsService.getReceiptById(receipt.id);
+            }
           }
         } catch (extractError: any) {
           console.warn('OCR extraction error, will retry on review screen:', extractError);

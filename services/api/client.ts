@@ -28,13 +28,20 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor - Add auth token
+    // Request interceptor - Add auth token and handle FormData
     this.client.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         const token = await this.getToken();
         if (token && config.headers) {
           config.headers.Authorization = `Token ${token}`;
         }
+        
+        // If FormData is being sent, remove Content-Type header
+        // to let axios/browser set it automatically with boundary
+        if (config.data instanceof FormData && config.headers) {
+          delete config.headers['Content-Type'];
+        }
+        
         return config;
       },
       (error: AxiosError) => {
@@ -187,13 +194,18 @@ class ApiClient {
 
   // For file uploads (FormData)
   async postFormData<T>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
+    // Ensure trailing slash for Django URLs (Django REST framework requires it)
+    const normalizedUrl = url.endsWith('/') ? url : url + '/';
+    
     // Don't set Content-Type header - let axios set it automatically with boundary
     // Setting it manually prevents axios from adding the boundary parameter
-    const response = await this.client.post<T>(url, formData, {
+    // The interceptor will handle removing Content-Type for FormData
+    const response = await this.client.post<T>(normalizedUrl, formData, {
       ...config,
       headers: {
         ...config?.headers,
-        // Remove Content-Type - axios will set it with boundary automatically
+        // Explicitly remove Content-Type to let axios handle it
+        'Content-Type': undefined,
       },
     });
     return response.data;

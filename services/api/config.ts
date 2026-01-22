@@ -3,8 +3,39 @@
  * Base URL and configuration for API requests
  */
 
+import { Platform } from 'react-native';
+
+/**
+ * Get the default API base URL based on platform and connection type
+ * - Android Emulator (local): Use 10.0.2.2 to access host machine's localhost
+ * - Network connection (Expo Go/dev build over network): Use network IP
+ * - iOS Simulator: Use localhost (same as host)
+ * - Web: Use localhost
+ * - Physical Device: Use network IP (set via EXPO_PUBLIC_API_URL)
+ */
+const getDefaultBaseURL = (): string => {
+  // If environment variable is set, use it (highest priority)
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // Platform-specific defaults
+  if (Platform.OS === 'android') {
+    // Default to network IP for Expo Go / network dev builds
+    // If using local Android emulator, change to 'http://10.0.2.2:5000/api'
+    // Or set EXPO_PUBLIC_API_URL environment variable
+    return 'http://192.168.0.193:5000/api';
+  } else if (Platform.OS === 'ios') {
+    // iOS Simulator can use localhost
+    return 'http://localhost:5000/api';
+  } else {
+    // Web platform
+    return 'http://localhost:5000/api';
+  }
+};
+
 export const API_CONFIG = {
-  BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.193:5000/api',
+  BASE_URL: getDefaultBaseURL(),
   TIMEOUT: 30000, // 30 seconds
 };
 
@@ -21,6 +52,19 @@ export const buildQueryString = (params: Record<string, any>): string => {
   
   const queryString = queryParams.toString();
   return queryString ? `?${queryString}` : '';
+};
+
+/**
+ * Helper function to ensure trailing slash for Django URLs
+ */
+const ensureTrailingSlash = (url: string): string => {
+  // If URL has query params, add trailing slash before query string
+  if (url.includes('?')) {
+    const [path, query] = url.split('?');
+    return `${path.endsWith('/') ? path : path + '/'}?${query}`;
+  }
+  // Otherwise, just ensure trailing slash
+  return url.endsWith('/') ? url : url + '/';
 };
 
 export const API_ENDPOINTS = {
@@ -81,10 +125,11 @@ export const API_ENDPOINTS = {
   RECEIPTS: {
     LIST: (params?: { search?: string; ordering?: string }) => {
       const query = buildQueryString(params || {});
-      return `/receipts${query}`;
+      const url = `/receipts${query}`;
+      return ensureTrailingSlash(url);
     },
     CREATE: '/receipts/',
-    UPLOAD: '/receipts/upload/',
+    UPLOAD: ensureTrailingSlash('/receipts/upload'),
     DETAIL: (id: number) => `/receipts/${id}/`,
     UPDATE: (id: number) => `/receipts/${id}/`,
     DELETE: (id: number) => `/receipts/${id}/`,
