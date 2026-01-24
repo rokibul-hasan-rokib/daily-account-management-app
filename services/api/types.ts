@@ -148,6 +148,7 @@ export interface ReceiptItem {
   category?: number;
   category_name?: string;
   product_code?: string;
+  notes?: string;
   receipt?: number;
   created_at?: string;
 }
@@ -214,6 +215,8 @@ export interface ReceiptItemListParams {
   start_date?: string;
   end_date?: string;
   ordering?: 'item_name' | 'total_price' | 'created_at';
+  receipt?: number;
+  receipt_id?: number;
   page?: number;
   page_size?: number;
 }

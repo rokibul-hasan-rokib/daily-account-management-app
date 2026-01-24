@@ -37,6 +37,7 @@ const getDefaultBaseURL = (): string => {
 export const API_CONFIG = {
   BASE_URL: getDefaultBaseURL(),
   TIMEOUT: 30000, // 30 seconds
+  UPLOAD_TIMEOUT: 120000, // 2 minutes for image uploads/OCR
 };
 
 /**

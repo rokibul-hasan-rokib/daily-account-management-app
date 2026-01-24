@@ -148,8 +148,11 @@ export default function ScanReceiptScreen() {
       
       try {
         const uploadResponse = await ReceiptsService.uploadReceipt(formData);
-        // uploadReceipt returns ReceiptUploadResponse which has receipt property
+        // uploadReceipt returns ReceiptUploadResponse which may include top-level items
         receipt = uploadResponse.receipt || uploadResponse;
+        if (uploadResponse.items && receipt && !receipt.items) {
+          receipt = { ...receipt, items: uploadResponse.items };
+        }
         console.log('Receipt uploaded:', receipt?.id, 'Items:', receipt?.items?.length || 0, 'Extracted:', receipt?.is_extracted);
         
         // Check if OCR was successful
@@ -188,6 +191,9 @@ export default function ScanReceiptScreen() {
           // Use receipt from extract response if available, otherwise reload
           if (extractResponse.receipt) {
             finalReceipt = extractResponse.receipt;
+            if ((extractResponse as any).items && !finalReceipt.items) {
+              finalReceipt = { ...finalReceipt, items: (extractResponse as any).items };
+            }
             console.log('Using receipt from extract response:', finalReceipt.items?.length || 0, 'items');
           } else {
             // Wait a bit for OCR processing (if async)
@@ -213,11 +219,13 @@ export default function ScanReceiptScreen() {
       setIsProcessing(false);
       
       // Navigate to review screen with extracted receipt data
+      const receiptPayload = finalReceipt ? encodeURIComponent(JSON.stringify(finalReceipt)) : undefined;
       router.push({
         pathname: '/scan-receipt-review',
         params: { 
           receiptId: finalReceipt.id.toString(),
           imageUri: image,
+          receiptData: receiptPayload,
         },
       });
     } catch (error: any) {

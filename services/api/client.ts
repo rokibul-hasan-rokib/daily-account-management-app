@@ -24,6 +24,10 @@ class ApiClient {
       },
     });
 
+    if (__DEV__) {
+      console.log('ApiClient baseURL:', API_CONFIG.BASE_URL);
+    }
+
     this.setupInterceptors();
   }
 
@@ -94,7 +98,10 @@ class ApiClient {
       (errorObj as any).response = error.response;
       return errorObj;
     } else if (error.request) {
-      // Request made but no response received - check if server is reachable
+      // Request made but no response received - could be timeout or network issue
+      if ((error as any).code === 'ECONNABORTED') {
+        return new Error('Request timed out. The server may be slow processing the upload. Try again or increase the upload timeout.');
+      }
       const message = `Cannot connect to server at ${API_CONFIG.BASE_URL}. Make sure your Django server is running and accessible.`;
       return new Error(message);
     } else {
@@ -207,6 +214,7 @@ class ApiClient {
         // Explicitly remove Content-Type to let axios handle it
         'Content-Type': undefined,
       },
+      timeout: config?.timeout ?? API_CONFIG.UPLOAD_TIMEOUT,
     });
     return response.data;
   }

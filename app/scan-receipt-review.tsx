@@ -6,7 +6,7 @@ import { MenuButton } from '@/components/menu-button';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput, Image, Alert, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput, Image, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useReceipts } from '@/contexts/receipts-context';
 import { useTransactions } from '@/contexts/transactions-context';
@@ -16,6 +16,7 @@ import { ReceiptItem } from '@/services/api/types';
 interface ExtractedItem {
   id?: number;
   item_name: string;
+  description?: string;
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -25,14 +26,19 @@ interface ExtractedItem {
 
 export default function ScanReceiptReviewScreen() {
   const params = useLocalSearchParams();
-  const imageUri = params.imageUri as string;
-  const receiptId = params.receiptId ? parseInt(params.receiptId as string) : null;
+  const imageUri = (Array.isArray(params.imageUri) ? params.imageUri[0] : params.imageUri) as string;
+  const receiptIdParam = Array.isArray(params.receiptId) ? params.receiptId[0] : params.receiptId;
+  const receiptDataParam = Array.isArray(params.receiptData) ? params.receiptData[0] : params.receiptData;
+  const receiptId = receiptIdParam ? parseInt(receiptIdParam as string, 10) : null;
+  const { width } = useWindowDimensions();
+  const isWide = width >= 980;
   
   const { updateReceipt, getReceiptById } = useReceipts();
   const { createTransaction } = useTransactions();
   
   const [isLoading, setIsLoading] = useState(!!receiptId);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState({
     vendor_name: '',
     receipt_date: new Date().toISOString().split('T')[0],
@@ -41,51 +47,210 @@ export default function ScanReceiptReviewScreen() {
     items: [] as ExtractedItem[],
   });
 
+  const parsedReceiptData = (() => {
+    if (!receiptDataParam) return null;
+    try {
+      return JSON.parse(decodeURIComponent(receiptDataParam as string));
+    } catch (error: any) {
+      console.warn('Failed to parse receiptData param:', error);
+      return null;
+    }
+  })();
+
+  const normalizeReceiptResponse = (response: any): any => {
+    if (!response) return response;
+    const base =
+      response.receipt ||
+      response.data ||
+      response.result ||
+      response;
+
+    if (response.items && base && !base.items) {
+      return { ...base, items: response.items };
+    }
+
+    return base;
+  };
+
+  const normalizeReceiptItems = (receipt: any): any[] => {
+    const items =
+      receipt?.items ||
+      receipt?.receipt_items ||
+      receipt?.receiptItems ||
+      receipt?.line_items ||
+      receipt?.lineItems ||
+      receipt?.products ||
+      [];
+
+    if (Array.isArray(items)) {
+      return items;
+    }
+
+    if (items && Array.isArray(items.results)) {
+      return items.results;
+    }
+
+    return [];
+  };
+
+  const setExtractedDataFromReceipt = (
+    receipt: any,
+    receiptItemsOverride?: any[],
+    preserveExisting = false
+  ) => {
+    const receiptItems = receiptItemsOverride ?? normalizeReceiptItems(receipt);
+    const normalizedVendor =
+      getReceiptField(receipt, 'vendor_name', '') ||
+      getReceiptField(receipt, 'vendor', '') ||
+      getReceiptField(receipt, 'merchant_name', '') ||
+      getReceiptField(receipt, 'merchant', '');
+    const normalizedDate =
+      getReceiptField(receipt, 'receipt_date', '') ||
+      getReceiptField(receipt, 'date', '') ||
+      getReceiptField(receipt, 'receiptDate', '') ||
+      (receipt?.created_at ? String(receipt.created_at).split('T')[0] : '');
+    const normalizedTotal =
+      getReceiptField(receipt, 'total_amount', '') ||
+      getReceiptField(receipt, 'total', '') ||
+      getReceiptField(receipt, 'grand_total', '') ||
+      getReceiptField(receipt, 'grandTotal', '') ||
+      getReceiptField(receipt, 'amount', '') ||
+      '0.00';
+    const normalizedTax =
+      getReceiptField(receipt, 'tax_amount', '') ||
+      getReceiptField(receipt, 'tax', '') ||
+      getReceiptField(receipt, 'vat', '') ||
+      getReceiptField(receipt, 'taxAmount', '') ||
+      '0.00';
+
+    setExtractedData(prev => ({
+      vendor_name: normalizedVendor || (preserveExisting ? prev.vendor_name : ''),
+      receipt_date: normalizedDate || (preserveExisting ? prev.receipt_date : new Date().toISOString().split('T')[0]),
+      total_amount: normalizedTotal || (preserveExisting ? prev.total_amount : '0.00'),
+      tax_amount: normalizedTax || (preserveExisting ? prev.tax_amount : '0.00'),
+      items: receiptItems && receiptItems.length > 0
+        ? receiptItems.map((item: any) => ({
+            id: item.id,
+            item_name: item.item_name || item.name || '',
+            description: item.notes || item.description || item.product_code || '',
+            quantity: parseFloat(item.quantity || item.qty || 0),
+            unit_price: parseFloat(item.unit_price || item.price || 0),
+            total_price: parseFloat(item.total_price || item.total || 0),
+            category: item.category,
+            product_code: item.product_code,
+          }))
+        : (preserveExisting ? prev.items : []),
+    }));
+
+    return {
+      normalizedVendor,
+      normalizedDate,
+      normalizedTotal,
+      normalizedTax,
+      itemsCount: receiptItems?.length || 0,
+    };
+  };
+
   // Load receipt data if receiptId is provided
   useEffect(() => {
+    if (parsedReceiptData) {
+      setExtractedDataFromReceipt(parsedReceiptData, undefined, true);
+      setIsLoading(false);
+    }
     if (receiptId) {
       loadReceipt();
     }
-  }, [receiptId]);
+  }, [receiptId, receiptDataParam]);
+
+  const getReceiptField = (receipt: any, key: string, fallback = ''): string => {
+    if (!receipt) return fallback;
+    return (
+      receipt[key] ??
+      receipt[`${key}`.replace('_', '')] ??
+      receipt[key.replace('_', '')] ??
+      fallback
+    );
+  };
+
+  const fetchReceiptItems = async (id: number): Promise<any[]> => {
+    const paramOptions = [
+      { receipt: id },
+      { receipt_id: id },
+      { receiptId: id },
+      { receipt__id: id },
+    ];
+
+    for (const params of paramOptions) {
+      try {
+        const response = await ReceiptItemsService.getReceiptItems(params as any);
+        if (response?.results?.length) {
+          return response.results;
+        }
+      } catch (error: any) {
+        // Try next param
+      }
+    }
+
+    return [];
+  };
 
   const loadReceipt = async () => {
     try {
       setIsLoading(true);
-      let receipt = await ReceiptsService.getReceiptById(receiptId!);
+      const receiptResponse = await ReceiptsService.getReceiptById(receiptId!);
+      let receipt = normalizeReceiptResponse(receiptResponse);
       
       // If receipt doesn't have items or extraction not done, trigger OCR
-      if (!receipt.items || receipt.items.length === 0 || !receipt.is_extracted) {
+      if (!normalizeReceiptItems(receipt).length || !receipt.is_extracted) {
         try {
+          setIsExtracting(true);
           const extractResponse = await ReceiptsService.extractReceipt(receiptId!);
-          if (extractResponse.receipt) {
-            receipt = extractResponse.receipt;
+          if (extractResponse?.receipt) {
+            receipt = normalizeReceiptResponse(extractResponse);
+          } else if ((extractResponse as any)?.items) {
+            receipt = {
+              ...receipt,
+              items: (extractResponse as any).items,
+              total_amount: (extractResponse as any).total_amount || receipt.total_amount,
+              tax_amount: (extractResponse as any).tax_amount || receipt.tax_amount,
+              receipt_date: (extractResponse as any).receipt_date || receipt.receipt_date,
+              vendor_name: (extractResponse as any).vendor_name || receipt.vendor_name,
+            };
           } else {
-            // If extraction is async, wait and reload
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            receipt = await ReceiptsService.getReceiptById(receiptId!);
+            // If extraction is async, poll for updated receipt
+            for (let attempt = 0; attempt < 5; attempt += 1) {
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              receipt = await ReceiptsService.getReceiptById(receiptId!);
+              if (normalizeReceiptItems(receipt).length || receipt.is_extracted) {
+                break;
+              }
+            }
           }
         } catch (extractError: any) {
           console.warn('OCR extraction failed:', extractError);
           // Continue with existing receipt data
+        } finally {
+          setIsExtracting(false);
         }
       }
+
+      let receiptItems = normalizeReceiptItems(receipt);
+      if (!receiptItems.length) {
+        receiptItems = await fetchReceiptItems(receiptId!);
+      }
       
-      setExtractedData({
-        vendor_name: receipt.vendor_name || '',
-        receipt_date: receipt.receipt_date || new Date().toISOString().split('T')[0],
-        total_amount: receipt.total_amount || '0.00',
-        tax_amount: receipt.tax_amount || '0.00',
-        items: receipt.items && receipt.items.length > 0 
-          ? receipt.items.map(item => ({
-              id: item.id,
-              item_name: item.item_name,
-              quantity: parseFloat(item.quantity),
-              unit_price: parseFloat(item.unit_price),
-              total_price: parseFloat(item.total_price),
-              category: item.category,
-              product_code: item.product_code,
-            }))
-          : [],
+      const { normalizedVendor, normalizedDate, normalizedTotal, normalizedTax, itemsCount } =
+        setExtractedDataFromReceipt(receipt, receiptItems, true);
+
+      console.log('Receipt debug:', {
+        receiptId,
+        receiptKeys: receipt ? Object.keys(receipt) : [],
+        receiptResponseKeys: receiptResponse ? Object.keys(receiptResponse as any) : [],
+        vendor: normalizedVendor,
+        date: normalizedDate,
+        total: normalizedTotal,
+        tax: normalizedTax,
+        itemsCount,
       });
     } catch (error: any) {
       console.error('Error loading receipt:', error);
@@ -116,6 +281,7 @@ export default function ScanReceiptReviewScreen() {
   const addItem = () => {
     const newItem: ExtractedItem = {
       item_name: '',
+      description: '',
       quantity: 1,
       unit_price: 0,
       total_price: 0,
@@ -159,6 +325,7 @@ export default function ScanReceiptReviewScreen() {
           // Update existing item
           await ReceiptItemsService.updateReceiptItem(item.id, {
             item_name: item.item_name,
+            notes: item.description?.trim() || undefined,
             quantity: item.quantity.toString(),
             unit_price: item.unit_price.toString(),
             total_price: item.total_price.toString(),
@@ -170,6 +337,7 @@ export default function ScanReceiptReviewScreen() {
           await ReceiptItemsService.createReceiptItem({
             receipt: receiptId,
             item_name: item.item_name,
+            notes: item.description?.trim() || undefined,
             quantity: item.quantity.toString(),
             unit_price: item.unit_price.toString(),
             total_price: item.total_price.toString(),
@@ -201,6 +369,67 @@ export default function ScanReceiptReviewScreen() {
     }
   };
 
+  const handleExtractNow = async () => {
+    if (!receiptId) return;
+    try {
+      setIsExtracting(true);
+      const extractResponse = await ReceiptsService.extractReceipt(receiptId);
+      const normalizedExtract = normalizeReceiptResponse(extractResponse);
+      if (normalizedExtract) {
+        const extractItems = normalizeReceiptItems(normalizedExtract);
+        if (extractItems.length) {
+          setExtractedData(prev => ({
+            ...prev,
+            vendor_name: getReceiptField(normalizedExtract, 'vendor_name', prev.vendor_name),
+            receipt_date: getReceiptField(normalizedExtract, 'receipt_date', prev.receipt_date),
+            total_amount: getReceiptField(normalizedExtract, 'total_amount', prev.total_amount),
+            tax_amount: getReceiptField(normalizedExtract, 'tax_amount', prev.tax_amount),
+            items: extractItems.map((item: any) => ({
+              id: item.id,
+              item_name: item.item_name || item.name || '',
+              description: item.notes || item.description || item.product_code || '',
+              quantity: parseFloat(item.quantity || item.qty || 0),
+              unit_price: parseFloat(item.unit_price || item.price || 0),
+              total_price: parseFloat(item.total_price || item.total || 0),
+              category: item.category,
+              product_code: item.product_code,
+            })),
+          }));
+          return;
+        }
+      }
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const receiptResponse = await ReceiptsService.getReceiptById(receiptId);
+        const receipt = normalizeReceiptResponse(receiptResponse);
+        let receiptItems = normalizeReceiptItems(receipt);
+        if (!receiptItems.length) {
+          receiptItems = await fetchReceiptItems(receiptId);
+        }
+        if (receiptItems.length) {
+          setExtractedData(prev => ({
+            ...prev,
+            items: receiptItems.map((item: any) => ({
+              id: item.id,
+              item_name: item.item_name || item.name || '',
+              description: item.notes || item.description || item.product_code || '',
+              quantity: parseFloat(item.quantity || item.qty || 0),
+              unit_price: parseFloat(item.unit_price || item.price || 0),
+              total_price: parseFloat(item.total_price || item.total || 0),
+              category: item.category,
+              product_code: item.product_code,
+            })),
+          }));
+          break;
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Extraction Failed', error.message || 'Could not extract receipt data.');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
@@ -228,113 +457,216 @@ export default function ScanReceiptReviewScreen() {
         <>
           {/* Receipt Image */}
           {imageUri && (
-            <Card variant="elevated" style={styles.imageCard}>
-              <Image source={{ uri: imageUri }} style={styles.image} />
-            </Card>
+            <>
+              <Card variant="elevated" style={styles.imageCard}>
+                <Image source={{ uri: imageUri }} style={styles.image} />
+              </Card>
+              <View style={styles.extractRow}>
+                <TouchableOpacity
+                  style={styles.extractButton}
+                  onPress={handleExtractNow}
+                  disabled={isExtracting}
+                >
+                  <MaterialIcons name="auto-fix-high" size={16} color={Colors.text.inverse} />
+                  <Text style={styles.extractButtonTextInverse}>
+                    {isExtracting ? 'Extracting...' : 'Extract Data from Image'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
 
-          {/* Merchant & Date */}
+          {/* Receipt Information */}
           <Card variant="elevated" style={styles.infoCard}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>Receipt Information</ThemedText>
+            <View style={styles.infoRow}>
+              <Input
+                label="Vendor Name"
+                value={extractedData.vendor_name}
+                onChangeText={(value) => setExtractedData(prev => ({ ...prev, vendor_name: value }))}
+                containerStyle={[styles.infoColumn, isWide && styles.infoColumnWide]}
+              />
+              <Input
+                label="Receipt Date"
+                value={extractedData.receipt_date}
+                onChangeText={(value) => setExtractedData(prev => ({ ...prev, receipt_date: value }))}
+                rightIcon={<MaterialIcons name="calendar-today" size={18} color={Colors.primary[500]} />}
+                containerStyle={[styles.infoColumn, isWide && styles.infoColumnWide]}
+              />
+              <Input
+                label="Total Amount"
+                value={extractedData.total_amount}
+                onChangeText={(value) => setExtractedData(prev => ({ ...prev, total_amount: value }))}
+                leftIcon={<Text style={styles.currencyPrefix}>£</Text>}
+                keyboardType="decimal-pad"
+                containerStyle={[styles.infoColumn, isWide && styles.infoColumnWide]}
+              />
+            </View>
             <Input
-              label="Vendor"
-              value={extractedData.vendor_name}
-              onChangeText={(value) => setExtractedData(prev => ({ ...prev, vendor_name: value }))}
-              leftIcon={<MaterialIcons name="store" size={20} color={Colors.primary[500]} />}
-            />
-            <Input
-              label="Date"
-              value={extractedData.receipt_date}
-              onChangeText={(value) => setExtractedData(prev => ({ ...prev, receipt_date: value }))}
-              leftIcon={<MaterialIcons name="calendar-today" size={20} color={Colors.primary[500]} />}
-            />
-            <Input
-              label="Total Amount"
-              value={extractedData.total_amount}
-              onChangeText={(value) => setExtractedData(prev => ({ ...prev, total_amount: value }))}
-              leftIcon={<MaterialIcons name="attach-money" size={20} color={Colors.primary[500]} />}
-              keyboardType="decimal-pad"
-            />
-            <Input
-              label="Tax Amount"
+              label="Tax Amount (Optional)"
               value={extractedData.tax_amount}
               onChangeText={(value) => setExtractedData(prev => ({ ...prev, tax_amount: value }))}
-              leftIcon={<MaterialIcons name="receipt" size={20} color={Colors.primary[500]} />}
+              leftIcon={<Text style={styles.currencyPrefix}>£</Text>}
               keyboardType="decimal-pad"
+              containerStyle={styles.infoFullRow}
             />
           </Card>
 
-      {/* Items List */}
-      <Card variant="elevated" style={styles.itemsCard}>
-        <View style={styles.itemsHeader}>
-          <View style={styles.itemsTitleContainer}>
-            <MaterialIcons name="list" size={20} color={Colors.primary[600]} />
-            <ThemedText type="subtitle" style={styles.itemsTitle}>
-              Line Items ({extractedData.items.length})
-            </ThemedText>
-          </View>
-          <TouchableOpacity style={styles.addItemButton} onPress={addItem}>
-            <MaterialIcons name="add" size={20} color={Colors.primary[600]} />
-          </TouchableOpacity>
-        </View>
+          {isExtracting && (
+            <View style={styles.extractingBanner}>
+              <ActivityIndicator size="small" color={Colors.primary[600]} />
+              <ThemedText style={styles.extractingText}>
+                Extracting data from image...
+              </ThemedText>
+            </View>
+          )}
 
-        <View style={styles.itemsList}>
-          {extractedData.items.map((item, index) => (
-            <Card key={item.id || `item-${index}`} variant="outlined" style={styles.itemCard}>
-              <View style={styles.itemHeader}>
-                <View style={styles.itemNumber}>
-                  <Text style={styles.itemNumberText}>#{index + 1}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => deleteItem(index)}
-                >
-                  <MaterialIcons name="delete-outline" size={20} color={Colors.error.main} />
-                </TouchableOpacity>
+          {/* Items List */}
+          <Card variant="elevated" style={styles.itemsCard}>
+            <View style={styles.itemsHeader}>
+              <View style={styles.itemsTitleContainer}>
+                <MaterialIcons name="list" size={20} color={Colors.primary[600]} />
+                <ThemedText type="subtitle" style={styles.itemsTitle}>
+                  Receipt Items
+                </ThemedText>
               </View>
+            </View>
 
-              <Input
-                label="Item Name"
-                value={item.item_name}
-                onChangeText={(value) => updateItem(index, 'item_name', value)}
-                placeholder="e.g., Beef, Milk"
-              />
+            {isWide ? (
+              <View>
+                <View style={styles.tableHeaderRow}>
+                  <Text style={[styles.tableHeaderCell, styles.colItemNameFlex]}>Item Name</Text>
+                  <Text style={[styles.tableHeaderCell, styles.colDescriptionFlex]}>Description</Text>
+                  <Text style={[styles.tableHeaderCell, styles.colQuantityFlex]}>Quantity</Text>
+                  <Text style={[styles.tableHeaderCell, styles.colUnitPriceFlex]}>Unit Price</Text>
+                  <Text style={[styles.tableHeaderCell, styles.colTotalPriceFlex]}>Total Price</Text>
+                </View>
 
-              <View style={styles.itemRow}>
-                <View style={styles.itemField}>
-                  <Text style={styles.itemFieldLabel}>Quantity</Text>
-                  <TextInput
-                    style={styles.itemFieldInput}
-                    value={item.quantity.toString()}
-                    onChangeText={(value) => updateItem(index, 'quantity', parseFloat(value) || 0)}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-                <View style={styles.itemField}>
-                  <Text style={styles.itemFieldLabel}>Unit Price</Text>
-                  <TextInput
-                    style={styles.itemFieldInput}
-                    value={item.unit_price.toFixed(2)}
-                    onChangeText={(value) => updateItem(index, 'unit_price', parseFloat(value) || 0)}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-                <View style={styles.itemField}>
-                  <Text style={styles.itemFieldLabel}>Total</Text>
-                  <Text style={styles.itemTotal}>
-                    £{item.total_price.toFixed(2)}
-                  </Text>
-                </View>
+                {extractedData.items.map((item, index) => (
+                  <View key={item.id || `item-${index}`} style={styles.tableRow}>
+                    <View style={[styles.tableCell, styles.colItemNameFlex]}>
+                      <TextInput
+                        style={styles.tableInput}
+                        value={item.item_name}
+                        onChangeText={(value) => updateItem(index, 'item_name', value)}
+                        placeholder="Item name"
+                      />
+                    </View>
+                    <View style={[styles.tableCell, styles.colDescriptionFlex]}>
+                      <TextInput
+                        style={styles.tableInput}
+                        value={item.description || ''}
+                        onChangeText={(value) => updateItem(index, 'description', value)}
+                        placeholder="Description"
+                      />
+                    </View>
+                    <View style={[styles.tableCell, styles.colQuantityFlex]}>
+                      <TextInput
+                        style={styles.tableInput}
+                        value={item.quantity.toString()}
+                        onChangeText={(value) => updateItem(index, 'quantity', parseFloat(value) || 0)}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <View style={[styles.tableCell, styles.colUnitPriceFlex]}>
+                      <TextInput
+                        style={styles.tableInput}
+                        value={item.unit_price.toFixed(2)}
+                        onChangeText={(value) => updateItem(index, 'unit_price', parseFloat(value) || 0)}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <View style={[styles.tableCell, styles.colTotalPriceFlex]}>
+                      <TextInput
+                        style={[styles.tableInput, styles.tableInputDisabled]}
+                        value={item.total_price.toFixed(2)}
+                        editable={false}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={styles.rowDeleteButton}
+                      onPress={() => deleteItem(index)}
+                    >
+                      <MaterialIcons name="delete-outline" size={18} color={Colors.error.main} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
-            </Card>
-          ))}
-        </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View>
+                  <View style={styles.tableHeaderRow}>
+                    <Text style={[styles.tableHeaderCell, styles.colItemName]}>Item Name</Text>
+                    <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
+                    <Text style={[styles.tableHeaderCell, styles.colQuantity]}>Quantity</Text>
+                    <Text style={[styles.tableHeaderCell, styles.colUnitPrice]}>Unit Price</Text>
+                    <Text style={[styles.tableHeaderCell, styles.colTotalPrice]}>Total Price</Text>
+                  </View>
 
-        {/* Calculated Total */}
-        <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Calculated Total</Text>
-          <Text style={styles.totalValue}>£{calculateTotal().toFixed(2)}</Text>
-        </View>
-      </Card>
+                  {extractedData.items.map((item, index) => (
+                    <View key={item.id || `item-${index}`} style={styles.tableRow}>
+                      <View style={[styles.tableCell, styles.colItemName]}>
+                        <TextInput
+                          style={styles.tableInput}
+                          value={item.item_name}
+                          onChangeText={(value) => updateItem(index, 'item_name', value)}
+                          placeholder="Item name"
+                        />
+                      </View>
+                      <View style={[styles.tableCell, styles.colDescription]}>
+                        <TextInput
+                          style={styles.tableInput}
+                          value={item.description || ''}
+                          onChangeText={(value) => updateItem(index, 'description', value)}
+                          placeholder="Description"
+                        />
+                      </View>
+                      <View style={[styles.tableCell, styles.colQuantity]}>
+                        <TextInput
+                          style={styles.tableInput}
+                          value={item.quantity.toString()}
+                          onChangeText={(value) => updateItem(index, 'quantity', parseFloat(value) || 0)}
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={[styles.tableCell, styles.colUnitPrice]}>
+                        <TextInput
+                          style={styles.tableInput}
+                          value={item.unit_price.toFixed(2)}
+                          onChangeText={(value) => updateItem(index, 'unit_price', parseFloat(value) || 0)}
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={[styles.tableCell, styles.colTotalPrice]}>
+                        <TextInput
+                          style={[styles.tableInput, styles.tableInputDisabled]}
+                          value={item.total_price.toFixed(2)}
+                          editable={false}
+                        />
+                      </View>
+                      <TouchableOpacity
+                        style={styles.rowDeleteButton}
+                        onPress={() => deleteItem(index)}
+                      >
+                        <MaterialIcons name="delete-outline" size={18} color={Colors.error.main} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+
+            <TouchableOpacity style={styles.addItemRowButton} onPress={addItem}>
+              <MaterialIcons name="add" size={18} color={Colors.primary[600]} />
+              <Text style={styles.addItemRowText}>Add Another Item</Text>
+            </TouchableOpacity>
+
+            {/* Grand Total */}
+            <View style={styles.totalContainer}>
+              <Text style={styles.totalLabel}>Grand Total (from items)</Text>
+              <Text style={styles.totalValue}>£{calculateTotal().toFixed(2)}</Text>
+            </View>
+          </Card>
 
       {/* Action Buttons */}
       <View style={styles.actions}>
@@ -400,10 +732,43 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     backgroundColor: Colors.gray[100],
   },
+  extractRow: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
   infoCard: {
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
     padding: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.text.primary,
+    marginBottom: Spacing.xs,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+  },
+  infoColumn: {
+    flexGrow: 1,
+    flexBasis: 260,
+    minWidth: 240,
+  },
+  infoColumnWide: {
+    flexBasis: 0,
+    flexGrow: 1,
+  },
+  infoFullRow: {
+    marginTop: Spacing.xs,
+  },
+  currencyPrefix: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.text.secondary,
+    fontWeight: Typography.fontWeight.semibold,
   },
   itemsCard: {
     marginHorizontal: Spacing.lg,
@@ -426,73 +791,112 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.bold,
     color: Colors.text.primary,
   },
-  addItemButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary[100],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemsList: {
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  itemCard: {
-    padding: Spacing.md,
-    backgroundColor: Colors.gray[50],
-  },
-  itemHeader: {
+  extractButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: 8,
+    backgroundColor: Colors.primary[600],
   },
-  itemNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary[500],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemNumberText: {
+  extractButtonTextInverse: {
     fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.bold,
+    fontWeight: Typography.fontWeight.semibold,
     color: Colors.text.inverse,
   },
-  deleteButton: {
-    padding: Spacing.xs,
-  },
-  itemRow: {
+  tableHeaderRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    backgroundColor: Colors.gray[100],
+    borderRadius: 8,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
-  itemField: {
-    flex: 1,
-  },
-  itemFieldLabel: {
-    fontSize: Typography.fontSize.xs,
+  tableHeaderCell: {
+    fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semibold,
     color: Colors.text.secondary,
-    marginBottom: Spacing.xs,
   },
-  itemFieldInput: {
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray[200],
+  },
+  tableCell: {
+    paddingHorizontal: Spacing.xs,
+  },
+  tableInput: {
     backgroundColor: Colors.background.light,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.primary[200],
+    borderColor: Colors.gray[300],
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.sm,
     fontSize: Typography.fontSize.base,
     color: Colors.text.primary,
   },
-  itemTotal: {
+  tableInputDisabled: {
+    backgroundColor: Colors.gray[100],
+    color: Colors.text.secondary,
+  },
+  colItemName: {
+    width: 180,
+  },
+  colDescription: {
+    width: 160,
+  },
+  colQuantity: {
+    width: 100,
+  },
+  colUnitPrice: {
+    width: 120,
+  },
+  colTotalPrice: {
+    width: 120,
+  },
+  colItemNameFlex: {
+    flex: 2,
+    minWidth: 180,
+  },
+  colDescriptionFlex: {
+    flex: 2,
+    minWidth: 160,
+  },
+  colQuantityFlex: {
+    flex: 1,
+    minWidth: 100,
+  },
+  colUnitPriceFlex: {
+    flex: 1,
+    minWidth: 120,
+  },
+  colTotalPriceFlex: {
+    flex: 1,
+    minWidth: 120,
+  },
+  rowDeleteButton: {
+    padding: Spacing.xs,
+  },
+  addItemRowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.primary[200],
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  addItemRowText: {
     fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.bold,
+    fontWeight: Typography.fontWeight.semibold,
     color: Colors.primary[700],
-    marginTop: Spacing.sm + 4,
   },
   totalContainer: {
     flexDirection: 'row',
@@ -536,5 +940,22 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     fontSize: Typography.fontSize.base,
     color: Colors.text.secondary,
+  },
+  extractingBanner: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.sm,
+    borderRadius: 8,
+    backgroundColor: Colors.primary[50],
+    borderWidth: 1,
+    borderColor: Colors.primary[200],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  extractingText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.primary[700],
+    fontWeight: Typography.fontWeight.semibold,
   },
 });
