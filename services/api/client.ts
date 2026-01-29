@@ -14,6 +14,7 @@ const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && typeof 
 
 class ApiClient {
   private client: AxiosInstance;
+  private inMemoryToken: string | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -31,13 +32,26 @@ class ApiClient {
     this.setupInterceptors();
   }
 
+  private buildAuthHeader(token: string): string {
+    const cleanToken = token.trim();
+    const hasPrefix = cleanToken.startsWith('Bearer ') || cleanToken.startsWith('Token ');
+    const looksLikeJwt = cleanToken.split('.').length === 3;
+    return hasPrefix ? cleanToken : looksLikeJwt ? `Bearer ${cleanToken}` : `Token ${cleanToken}`;
+  }
+
   private setupInterceptors() {
     // Request interceptor - Add auth token and handle FormData
     this.client.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         const token = await this.getToken();
-        if (token && config.headers) {
-          config.headers.Authorization = `Token ${token}`;
+        if (token) {
+          config.headers = config.headers || {};
+          config.headers.Authorization = this.buildAuthHeader(token);
+        }
+
+        if (__DEV__) {
+          const hasAuth = !!config.headers?.Authorization;
+          console.log(`ApiClient: ${config.method?.toUpperCase()} ${config.url} auth=${hasAuth ? 'yes' : 'no'}`);
         }
         
         // If FormData is being sent, remove Content-Type header
@@ -61,6 +75,9 @@ class ApiClient {
           // Unauthorized - clear token and redirect to login
           await this.clearToken();
         }
+        if (__DEV__) {
+          console.warn('ApiClient: Response error', error.response?.status, error.config?.url);
+        }
         return Promise.reject(this.handleError(error));
       }
     );
@@ -70,7 +87,31 @@ class ApiClient {
     if (error.response) {
       // Server responded with error status
       const data = error.response.data as any;
-      let message = data?.error || data?.detail || data?.message || error.message;
+      const buildFieldErrors = (payload: any): string | null => {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          return null;
+        }
+        const entries = Object.entries(payload)
+          .map(([key, value]) => {
+            if (Array.isArray(value)) {
+              return `${key}: ${value.join(', ')}`;
+            }
+            if (value && typeof value === 'object') {
+              return `${key}: ${JSON.stringify(value)}`;
+            }
+            return `${key}: ${String(value)}`;
+          })
+          .filter(Boolean);
+        return entries.length ? entries.join(' | ') : null;
+      };
+
+      const fieldErrors = buildFieldErrors(data);
+      let message =
+        data?.error ||
+        data?.detail ||
+        data?.message ||
+        fieldErrors ||
+        error.message;
       
       // Check if response is HTML (Django debug error page)
       if (typeof data === 'string' && data.includes('<!DOCTYPE html>')) {
@@ -113,17 +154,22 @@ class ApiClient {
   // Token management
   async setToken(token: string): Promise<void> {
     try {
+      const cleanToken = token.trim();
+      this.inMemoryToken = cleanToken;
       if (isWeb && typeof localStorage !== 'undefined') {
         // Use localStorage for web
-        localStorage.setItem(TOKEN_KEY, token);
+        localStorage.setItem(TOKEN_KEY, cleanToken);
         console.log('ApiClient: Token stored in localStorage');
       } else if (!isWeb) {
         // Use SecureStore for native platforms
-        await SecureStore.setItemAsync(TOKEN_KEY, token);
+        await SecureStore.setItemAsync(TOKEN_KEY, cleanToken);
         console.log('ApiClient: Token stored in SecureStore');
       } else {
         console.warn('ApiClient: No storage available - token not persisted');
       }
+
+      // Also set default Authorization header for immediate requests
+      this.client.defaults.headers.common.Authorization = this.buildAuthHeader(cleanToken);
     } catch (error: any) {
       console.error('ApiClient: Error storing token (non-critical):', error);
       // Don't throw - allow login to proceed even if storage fails
@@ -134,13 +180,25 @@ class ApiClient {
 
   async getToken(): Promise<string | null> {
     try {
+      if (this.inMemoryToken) {
+        return this.inMemoryToken;
+      }
+
+      let storedToken: string | null = null;
       if (isWeb && typeof localStorage !== 'undefined') {
         // Use localStorage for web
-        return localStorage.getItem(TOKEN_KEY);
+        storedToken = localStorage.getItem(TOKEN_KEY);
       } else {
         // Use SecureStore for native platforms
-        return await SecureStore.getItemAsync(TOKEN_KEY);
+        storedToken = await SecureStore.getItemAsync(TOKEN_KEY);
       }
+
+      if (storedToken) {
+        this.inMemoryToken = storedToken;
+        this.client.defaults.headers.common.Authorization = this.buildAuthHeader(storedToken);
+      }
+
+      return storedToken;
     } catch (error) {
       console.warn('Error getting token:', error);
       return null;
@@ -149,6 +207,7 @@ class ApiClient {
 
   async clearToken(): Promise<void> {
     try {
+      this.inMemoryToken = null;
       if (isWeb && typeof localStorage !== 'undefined') {
         // Use localStorage for web
         localStorage.removeItem(TOKEN_KEY);
@@ -156,6 +215,7 @@ class ApiClient {
         // Use SecureStore for native platforms
         await SecureStore.deleteItemAsync(TOKEN_KEY);
       }
+      delete this.client.defaults.headers.common.Authorization;
     } catch (error) {
       // Ignore errors
       console.warn('Error clearing token:', error);

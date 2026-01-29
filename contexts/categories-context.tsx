@@ -8,6 +8,7 @@ import { CategoriesService } from '@/services/api';
 import { Category } from '@/services/api/types';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { useAuth } from '@/contexts/auth-context';
 
 interface CategoriesContextType {
   categories: Category[];
@@ -107,6 +108,7 @@ async function clearCachedCategories(): Promise<void> {
 export function CategoriesProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isAuthenticated } = useAuth();
 
   const incomeCategories = categories.filter(cat => cat.type === 'income');
   const expenseCategories = categories.filter(cat => cat.type === 'expense');
@@ -144,8 +146,7 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
 
   const refreshCategoriesFromAPI = async () => {
     try {
-      const response = await CategoriesService.getCategories();
-      const categoriesList = Array.isArray(response) ? response : response.results;
+      const categoriesList = await CategoriesService.getAllCategories();
       setCategories(categoriesList);
       await storeCategories(categoriesList);
     } catch (error) {
@@ -199,6 +200,13 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
+
+  // Refresh categories after login on web/native
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadCategories(false);
+    }
+  }, [isAuthenticated, loadCategories]);
 
   return (
     <CategoriesContext.Provider

@@ -15,6 +15,7 @@ export { MerchantsService } from './merchants.service';
 export { TransactionsService } from './transactions.service';
 export { ReceiptsService } from './receipts.service';
 export { ReceiptItemsService } from './receipt-items.service';
+export { InvoicesService } from './invoices.service';
 export { LiabilitiesService } from './liabilities.service';
 export { RulesService } from './rules.service';
 export { BudgetsService } from './budgets.service';

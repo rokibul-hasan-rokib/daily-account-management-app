@@ -16,6 +16,7 @@ services/api/
 ├── merchants.service.ts   # Merchant CRUD operations
 ├── transactions.service.ts # Transaction CRUD operations
 ├── receipts.service.ts     # Receipt operations (including OCR)
+├── invoices.service.ts     # Invoice OCR re-extraction
 ├── receipt-items.service.ts # Receipt item analytics
 ├── liabilities.service.ts  # Bills/liabilities management
 ├── rules.service.ts        # Category rules
@@ -153,6 +154,15 @@ const receipt = await ReceiptsService.createReceipt({
 
 // Extract receipt using OCR
 const extracted = await ReceiptsService.extractReceipt(receipt.id);
+```
+
+### Invoices
+
+```typescript
+import { InvoicesService } from '@/services/api';
+
+// Re-extract invoice OCR
+const invoiceExtract = await InvoicesService.extractInvoice(456);
 ```
 
 ### Analytics

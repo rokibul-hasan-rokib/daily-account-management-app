@@ -6,11 +6,12 @@ import { MenuButton } from '@/components/menu-button';
 import { Colors, Typography, Spacing, Shadows } from '@/constants/design-system';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput, Image, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { Platform, ScrollView, StyleSheet, TouchableOpacity, View, Text, TextInput, Image, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useReceipts } from '@/contexts/receipts-context';
 import { useTransactions } from '@/contexts/transactions-context';
-import { ReceiptsService, ReceiptItemsService } from '@/services/api';
+import { useCategories } from '@/contexts/categories-context';
+import { CategoriesService, ReceiptsService, ReceiptItemsService } from '@/services/api';
 import { ReceiptItem } from '@/services/api/types';
 
 interface ExtractedItem {
@@ -34,10 +35,13 @@ export default function ScanReceiptReviewScreen() {
   const isWide = width >= 980;
   
   const { updateReceipt, getReceiptById } = useReceipts();
-  const { createTransaction } = useTransactions();
+  const { createTransaction, refreshTransactions } = useTransactions();
+  const { expenseCategories, refreshCategories } = useCategories();
   
   const [isLoading, setIsLoading] = useState(!!receiptId);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState({
     vendor_name: '',
@@ -303,67 +307,280 @@ export default function ScanReceiptReviewScreen() {
     return extractedData.items.reduce((sum, item) => sum + item.total_price, 0);
   };
 
+  const formatDateForAPI = (dateString: string): string => {
+    if (!dateString) return new Date().toISOString().split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    if (dateString.includes('T')) {
+      return dateString.split('T')[0];
+    }
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const normalizeAmount = (value: string | number): string => {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+    }
+    if (!value) return '0.00';
+    const cleaned = value.toString().replace(/[^0-9.\-]/g, '');
+    const parsed = parseFloat(cleaned);
+    if (Number.isFinite(parsed)) {
+      return parsed.toFixed(2);
+    }
+    return '0.00';
+  };
+
+  const resolveDefaultCategoryId = async (items: ExtractedItem[]): Promise<number | undefined> => {
+    const fromItems = items.find(item => item.category)?.category;
+    if (fromItems) return fromItems;
+    if (expenseCategories.length) return expenseCategories[0].id;
+
+    try {
+      await refreshCategories();
+    } catch (error) {
+      console.warn('Failed to refresh categories:', error);
+    }
+
+    if (expenseCategories.length) return expenseCategories[0].id;
+
+    try {
+      const response = await CategoriesService.getCategories({ type: 'expense' });
+      const list = Array.isArray(response) ? response : response.results || [];
+      return list[0]?.id;
+    } catch (error) {
+      console.warn('Failed to fetch expense categories:', error);
+    }
+
+    return undefined;
+  };
+
+  const buildReceiptFormData = async (
+    normalizedDate: string,
+    normalizedAmount: string
+  ): Promise<FormData> => {
+    if (!imageUri) {
+      throw new Error('Receipt image is missing. Please rescan and try again.');
+    }
+
+    const formData = new FormData();
+
+    if (Platform.OS === 'web') {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      const imageName = 'receipt.jpg';
+      const imageType = blob.type || 'image/jpeg';
+      const imageFile = new File([blob], imageName, { type: imageType });
+      formData.append('image', imageFile);
+    } else {
+      const imageUriParts = imageUri.split('/');
+      const imageName = imageUriParts[imageUriParts.length - 1] || 'receipt.jpg';
+      let imageType = 'image/jpeg';
+      const lowerName = imageName.toLowerCase();
+      if (lowerName.endsWith('.png')) {
+        imageType = 'image/png';
+      } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+        imageType = 'image/jpeg';
+      }
+      formData.append('image', {
+        uri: imageUri,
+        type: imageType,
+        name: imageName,
+      } as any);
+    }
+
+    if (extractedData.vendor_name) {
+      formData.append('vendor_name', extractedData.vendor_name);
+    }
+    formData.append('receipt_date', normalizedDate);
+    formData.append('total_amount', normalizedAmount);
+    if (extractedData.tax_amount) {
+      formData.append('tax_amount', normalizeAmount(extractedData.tax_amount));
+    }
+
+    return formData;
+  };
+
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} timed out. Please try again.`));
+      }, ms);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (!receiptId) {
-      Alert.alert('Error', 'Receipt ID is missing.');
+      const message = 'Receipt ID is missing.';
+      setSaveError(message);
+      setSaveStatus(null);
+      Alert.alert('Error', message);
       return;
     }
 
     setIsSaving(true);
+    setSaveError(null);
+    setSaveStatus('Saving receipt...');
     try {
-      // Update receipt
-      await updateReceipt(receiptId, {
-        vendor_name: extractedData.vendor_name,
-        receipt_date: extractedData.receipt_date,
-        total_amount: extractedData.total_amount,
-        tax_amount: extractedData.tax_amount,
+      let activeReceiptId = receiptId;
+      let createdNewReceipt = false;
+      const normalizedAmount =
+        normalizeAmount(extractedData.total_amount) ||
+        normalizeAmount(calculateTotal());
+      const normalizedDate = formatDateForAPI(extractedData.receipt_date);
+      const normalizedItems = extractedData.items
+        .filter(item => item.item_name?.trim())
+        .map(item => ({
+          id: item.id,
+          item_name: item.item_name.trim(),
+          description: item.description?.trim() || undefined,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+          category: item.category,
+          product_code: item.product_code,
+        }));
+
+      console.log('Saving receipt and transaction...', {
+        receiptId,
+        amount: normalizedAmount,
+        date: normalizedDate,
+        items: normalizedItems.length,
       });
 
-      // Update or create receipt items
-      for (const item of extractedData.items) {
-        if (item.id) {
-          // Update existing item
-          await ReceiptItemsService.updateReceiptItem(item.id, {
-            item_name: item.item_name,
-            notes: item.description?.trim() || undefined,
-            quantity: item.quantity.toString(),
-            unit_price: item.unit_price.toString(),
-            total_price: item.total_price.toString(),
-            category: item.category,
-            product_code: item.product_code,
-          });
-        } else {
-          // Create new item
-          await ReceiptItemsService.createReceiptItem({
-            receipt: receiptId,
-            item_name: item.item_name,
-            notes: item.description?.trim() || undefined,
-            quantity: item.quantity.toString(),
-            unit_price: item.unit_price.toString(),
-            total_price: item.total_price.toString(),
-            category: item.category,
-            product_code: item.product_code,
-          });
+      // Update existing receipt (do not create a new one)
+      try {
+        await withTimeout(
+          updateReceipt(receiptId, {
+            vendor_name: extractedData.vendor_name,
+            receipt_date: normalizedDate,
+            total_amount: normalizedAmount,
+            tax_amount: normalizeAmount(extractedData.tax_amount),
+          }),
+          20000,
+          'Saving receipt'
+        );
+      } catch (error: any) {
+        const status = error?.response?.status;
+        const message = error?.message || '';
+        const isNotFound =
+          status === 404 || message.toLowerCase().includes('no receipt matches');
+
+        if (!isNotFound) {
+          throw error;
         }
+
+        setSaveStatus('Receipt not found. Creating a new receipt...');
+        const formData = await buildReceiptFormData(normalizedDate, normalizedAmount);
+        const createdReceipt = await withTimeout(
+          ReceiptsService.uploadReceipt(formData),
+          30000,
+          'Creating receipt'
+        );
+        activeReceiptId = createdReceipt.receipt?.id || (createdReceipt as any)?.id;
+        if (!activeReceiptId) {
+          throw new Error('Failed to create receipt. Please try again.');
+        }
+        createdNewReceipt = true;
       }
+
+      // Sync receipt items (create/update/delete)
+      setSaveStatus('Saving receipt items...');
+      const itemsForSave = createdNewReceipt
+        ? normalizedItems.map(item => ({ ...item, id: undefined }))
+        : normalizedItems;
+      const existingItems = createdNewReceipt ? [] : await fetchReceiptItems(activeReceiptId);
+      const currentIds = new Set(
+        itemsForSave.filter(item => item.id).map(item => item.id)
+      );
+
+      const itemsToDelete = existingItems
+        .filter(item => !currentIds.has(item.id))
+        .map(item => item.id);
+
+      const updatePromises = itemsForSave
+        .filter(item => item.id)
+        .map(item =>
+          ReceiptItemsService.updateReceiptItem(item.id!, {
+            item_name: item.item_name,
+            quantity: item.quantity.toString(),
+            unit_price: normalizeAmount(item.unit_price),
+            total_price: normalizeAmount(item.total_price),
+            category: item.category,
+            product_code: item.product_code,
+            notes: item.description,
+          })
+        );
+
+      const createPromises = itemsForSave
+        .filter(item => !item.id)
+        .map(item =>
+          ReceiptItemsService.createReceiptItem({
+            receipt: activeReceiptId,
+            item_name: item.item_name,
+            quantity: item.quantity.toString(),
+            unit_price: normalizeAmount(item.unit_price),
+            total_price: normalizeAmount(item.total_price),
+            category: item.category,
+            product_code: item.product_code,
+            notes: item.description,
+          })
+        );
+
+      const deletePromises = itemsToDelete.map(id =>
+        ReceiptItemsService.deleteReceiptItem(id)
+      );
+
+      await withTimeout(
+        Promise.all([...updatePromises, ...createPromises, ...deletePromises]),
+        20000,
+        'Saving receipt items'
+      );
 
       // Create transaction from receipt
       // Note: You may want to get the merchant ID from the merchant name
       // For now, we'll create without merchant
-      await createTransaction({
-        type: 'expense',
-        amount: extractedData.total_amount,
-        date: extractedData.receipt_date,
-        category: 1, // Default category - you may want to make this dynamic
-        description: `Receipt from ${extractedData.vendor_name}`,
-      });
+      const defaultCategoryId = await resolveDefaultCategoryId(itemsForSave);
+      if (defaultCategoryId) {
+        setSaveStatus('Saving transaction...');
+        await withTimeout(
+          createTransaction({
+            type: 'expense',
+            amount: normalizedAmount,
+            date: normalizedDate,
+            category: defaultCategoryId,
+            description: `Receipt from ${extractedData.vendor_name}`,
+          }),
+          20000,
+          'Saving transaction'
+        );
+        await refreshTransactions();
+      }
 
-      Alert.alert('Success', 'Receipt and transaction saved successfully!', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      const successMessage = defaultCategoryId
+        ? 'Receipt and transaction saved successfully!'
+        : 'Receipt saved successfully. No expense category found, so a transaction was not created.';
+      Alert.alert('Success', successMessage, [{ text: 'OK', onPress: () => router.replace('/transactions') }]);
+      setSaveStatus(null);
     } catch (error: any) {
       console.error('Error saving receipt:', error);
-      Alert.alert('Error', error.message || 'Failed to save receipt. Please try again.');
+      const details = error?.response?.data ? JSON.stringify(error.response.data) : '';
+      const message = error.message || details || 'Failed to save receipt. Please try again.';
+      setSaveError(message);
+      setSaveStatus(null);
+      Alert.alert('Error', message);
     } finally {
       setIsSaving(false);
     }
@@ -520,6 +737,19 @@ export default function ScanReceiptReviewScreen() {
               </ThemedText>
             </View>
           )}
+          {isSaving && saveStatus ? (
+            <View style={styles.savingBanner}>
+              <ActivityIndicator size="small" color={Colors.primary[600]} />
+              <ThemedText style={styles.savingText}>{saveStatus}</ThemedText>
+            </View>
+          ) : null}
+          {saveError ? (
+            <View style={styles.saveErrorBanner}>
+              <ThemedText style={styles.saveErrorText}>
+                {saveError}
+              </ThemedText>
+            </View>
+          ) : null}
 
           {/* Items List */}
           <Card variant="elevated" style={styles.itemsCard}>
@@ -670,20 +900,26 @@ export default function ScanReceiptReviewScreen() {
 
       {/* Action Buttons */}
       <View style={styles.actions}>
-        <Button
-          title="Cancel"
-          variant="outline"
+        <TouchableOpacity
+          style={[styles.actionButton, styles.cancelButton, isSaving && styles.buttonDisabled]}
           onPress={() => router.back()}
-          style={styles.cancelButton}
+          onClick={Platform.OS === 'web' ? () => router.back() : undefined}
           disabled={isSaving}
-        />
-        <Button
-          title={isSaving ? 'Saving...' : 'Save Transaction'}
-          variant="primary"
+          activeOpacity={0.7}
+        >
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.saveButton, isSaving && styles.buttonDisabled]}
           onPress={handleSave}
-          style={styles.saveButton}
+          onClick={Platform.OS === 'web' ? handleSave : undefined}
           disabled={isSaving}
-        />
+          activeOpacity={0.7}
+        >
+          <Text style={styles.saveButtonText}>
+            {isSaving ? 'Saving...' : 'Save Transaction'}
+          </Text>
+        </TouchableOpacity>
       </View>
         </>
       )}
@@ -924,11 +1160,49 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing['2xl'],
     gap: Spacing.md,
   },
+  saveErrorText: {
+    color: Colors.error.main,
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  saveErrorBanner: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.sm,
+    borderRadius: 8,
+    backgroundColor: Colors.error.light,
+    borderWidth: 1,
+    borderColor: Colors.error.main,
+  },
+  actionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
   cancelButton: {
     flex: 1,
+    borderWidth: 2,
+    borderColor: Colors.primary[500],
+    backgroundColor: Colors.background.light,
+  },
+  cancelButtonText: {
+    color: Colors.primary[600],
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
   },
   saveButton: {
     flex: 2,
+    backgroundColor: Colors.primary[500],
+  },
+  saveButtonText: {
+    color: Colors.text.inverse,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   loadingContainer: {
     padding: Spacing['2xl'],
@@ -952,6 +1226,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+  },
+  savingBanner: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.sm,
+    borderRadius: 8,
+    backgroundColor: Colors.primary[50],
+    borderWidth: 1,
+    borderColor: Colors.primary[200],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  savingText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.primary[700],
+    fontWeight: Typography.fontWeight.semibold,
   },
   extractingText: {
     fontSize: Typography.fontSize.sm,

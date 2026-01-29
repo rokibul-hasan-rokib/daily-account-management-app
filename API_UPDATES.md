@@ -98,6 +98,9 @@ All API endpoints from the documentation are now integrated:
 - ✅ GET `/api/receipts/{id}/`
 - ✅ GET `/api/receipts/`
 
+### Invoices
+- ✅ POST `/api/invoices/{id}/extract/` (OCR re-extract)
+
 ### Receipt Items
 - ✅ GET `/api/receipt-items/`
 - ✅ GET `/api/receipt-items/analytics/`

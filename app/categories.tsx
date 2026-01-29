@@ -5,8 +5,8 @@ import { Colors, Shadows, Spacing, Typography } from '@/constants/design-system'
 import { useCategories } from '@/contexts/categories-context';
 import { Category } from '@/services/api/types';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function CategoriesScreen() {
@@ -17,6 +17,12 @@ export default function CategoriesScreen() {
     refreshCategories 
   } = useCategories();
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshCategories();
+    }, [refreshCategories])
+  );
 
   const filteredCategories = useMemo(() => {
     return categories.filter(cat => 

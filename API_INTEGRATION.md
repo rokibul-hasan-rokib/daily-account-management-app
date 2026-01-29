@@ -30,6 +30,7 @@ All API endpoints organized into service classes:
 - ✅ **MerchantsService** - Merchant CRUD operations
 - ✅ **TransactionsService** - Transaction CRUD operations
 - ✅ **ReceiptsService** - Receipt operations including OCR extraction
+- ✅ **InvoicesService** - Invoice OCR re-extraction
 - ✅ **ReceiptItemsService** - Receipt item analytics
 - ✅ **LiabilitiesService** - Bills/liabilities management
 - ✅ **RulesService** - Category rules management
@@ -68,6 +69,7 @@ services/api/
 ├── merchants.service.ts   # Merchants
 ├── transactions.service.ts # Transactions
 ├── receipts.service.ts    # Receipts & OCR
+├── invoices.service.ts    # Invoice OCR re-extraction
 ├── receipt-items.service.ts # Receipt items
 ├── liabilities.service.ts # Bills/Liabilities
 ├── rules.service.ts      # Category rules
@@ -98,7 +100,7 @@ function MyComponent() {
 
 ### API Calls
 ```typescript
-import { TransactionsService, CategoriesService } from '@/services/api';
+import { TransactionsService, CategoriesService, InvoicesService } from '@/services/api';
 
 // Get transactions
 const transactions = await TransactionsService.getTransactions({
@@ -114,6 +116,9 @@ const category = await CategoriesService.createCategory({
   icon: '🚗',
   color: '#e74c3c'
 });
+
+// Re-extract invoice OCR
+const invoiceExtract = await InvoicesService.extractInvoice(456);
 ```
 
 ## Configuration

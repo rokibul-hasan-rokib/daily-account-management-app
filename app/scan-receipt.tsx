@@ -141,32 +141,20 @@ export default function ScanReceiptScreen() {
         imageFile: Platform.OS === 'web' ? { name: imageFile.name, type: imageFile.type } : 'FormData object'
       });
 
-      // Step 1: Try upload endpoint first (handles image + auto OCR)
-      // According to API docs, upload endpoint automatically runs OCR
-      let receipt: any;
+      // Step 1: Upload endpoint (handles image + auto OCR)
+      // Per API spec, upload returns receipt + items in response
+      const uploadResponse = await ReceiptsService.uploadReceipt(formData);
+      let receipt: any = uploadResponse.receipt || uploadResponse;
+      if (uploadResponse.items && receipt && !receipt.items) {
+        receipt = { ...receipt, items: uploadResponse.items };
+      }
+      console.log('Receipt uploaded:', receipt?.id, 'Items:', receipt?.items?.length || 0, 'Extracted:', receipt?.is_extracted);
+
       let needsExtraction = false;
-      
-      try {
-        const uploadResponse = await ReceiptsService.uploadReceipt(formData);
-        // uploadReceipt returns ReceiptUploadResponse which may include top-level items
-        receipt = uploadResponse.receipt || uploadResponse;
-        if (uploadResponse.items && receipt && !receipt.items) {
-          receipt = { ...receipt, items: uploadResponse.items };
-        }
-        console.log('Receipt uploaded:', receipt?.id, 'Items:', receipt?.items?.length || 0, 'Extracted:', receipt?.is_extracted);
-        
-        // Check if OCR was successful
-        if (uploadResponse.extracted && receipt?.items && receipt.items.length > 0) {
-          console.log('OCR completed automatically via upload endpoint. Confidence:', uploadResponse.confidence);
-        } else {
-          needsExtraction = true;
-        }
-      } catch (uploadError: any) {
-        console.log('Upload endpoint failed, trying create endpoint:', uploadError.response?.data || uploadError.message);
-        // Fallback to create endpoint (doesn't auto-run OCR)
-        receipt = await ReceiptsService.createReceipt(formData);
-        console.log('Receipt created:', receipt?.id, 'Items:', receipt?.items?.length || 0);
-        needsExtraction = true; // Create endpoint doesn't auto-extract
+      if (uploadResponse.extracted && receipt?.items && receipt.items.length > 0) {
+        console.log('OCR completed automatically via upload endpoint. Confidence:', uploadResponse.confidence);
+      } else {
+        needsExtraction = true;
       }
       
       if (!receipt || !receipt.id) {

@@ -10,7 +10,7 @@ import { Platform } from 'react-native';
  * - Android Emulator (local): Use 10.0.2.2 to access host machine's localhost
  * - Network connection (Expo Go/dev build over network): Use network IP
  * - iOS Simulator: Use localhost (same as host)
- * - Web: Use localhost
+ * - Web: Use current hostname when not localhost
  * - Physical Device: Use network IP (set via EXPO_PUBLIC_API_URL)
  */
 const getDefaultBaseURL = (): string => {
@@ -29,7 +29,14 @@ const getDefaultBaseURL = (): string => {
     // iOS Simulator can use localhost
     return 'http://localhost:5000/api';
   } else {
-    // Web platform
+    // Web platform - use current host when opened from another device
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      const host = window.location.hostname;
+      if (host !== 'localhost' && host !== '127.0.0.1') {
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+        return `${protocol}//${host}:5000/api`;
+      }
+    }
     return 'http://localhost:5000/api';
   }
 };
@@ -85,7 +92,8 @@ export const API_ENDPOINTS = {
   CATEGORIES: {
     LIST: (params?: { type?: 'income' | 'expense'; search?: string; ordering?: string }) => {
       const query = buildQueryString(params || {});
-      return `/categories${query}`;
+      const url = `/categories${query}`;
+      return ensureTrailingSlash(url);
     },
     CREATE: '/categories/',
     DETAIL: (id: number) => `/categories/${id}/`,
@@ -135,6 +143,11 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `/receipts/${id}/`,
     DELETE: (id: number) => `/receipts/${id}/`,
     EXTRACT: (id: number) => `/receipts/${id}/extract/`,
+  },
+  // Invoices
+  INVOICES: {
+    DETAIL: (id: number) => `/invoices/${id}/`,
+    EXTRACT: (id: number) => `/invoices/${id}/extract/`,
   },
   // Receipt Items
   RECEIPT_ITEMS: {

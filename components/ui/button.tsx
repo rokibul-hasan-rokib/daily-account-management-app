@@ -1,6 +1,6 @@
 import { BorderRadius, Colors, Spacing, Typography, Shadows } from '@/constants/design-system';
 import React from 'react';
-import { StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 
 interface ButtonProps {
   title: string;
@@ -21,8 +21,14 @@ export function Button({
   textStyle,
   disabled = false,
 }: ButtonProps) {
+  const handleClick = () => {
+    if (!disabled) {
+      onPress();
+    }
+  };
+
   return (
-    <TouchableOpacity
+    <Pressable
       style={[
         styles.button,
         styles[variant],
@@ -31,8 +37,10 @@ export function Button({
         style,
       ]}
       onPress={onPress}
+      // React Native Web sometimes misses onPress; ensure click works.
+      onClick={Platform.OS === 'web' ? handleClick : undefined}
       disabled={disabled}
-      activeOpacity={0.7}
+      accessibilityRole="button"
     >
       <Text
         style={[
@@ -44,7 +52,7 @@ export function Button({
       >
         {title}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 

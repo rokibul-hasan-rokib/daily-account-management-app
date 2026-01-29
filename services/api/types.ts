@@ -196,9 +196,19 @@ export interface ReceiptExtractResponse {
   items_extracted?: number;
 }
 
+// Invoice types
+export interface InvoiceExtractResponse {
+  message?: string;
+  invoice_id?: number;
+  extracted?: boolean;
+  confidence?: number;
+  extracted_data?: Record<string, any>;
+}
+
 export interface ReceiptUploadResponse {
   message: string;
   receipt: Receipt;
+  items?: ReceiptItem[];
   extracted: boolean;
   confidence: number;
 }

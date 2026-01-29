@@ -13,6 +13,43 @@ import {
 } from './types';
 
 export class AuthService {
+  private static extractToken(payload: any): string | null {
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+
+    const directKeys = [
+      'token',
+      'access',
+      'access_token',
+      'auth_token',
+      'key',
+      'jwt',
+    ];
+    for (const key of directKeys) {
+      const value = payload[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    if (payload.tokens && typeof payload.tokens === 'object') {
+      const nestedToken =
+        payload.tokens.access ||
+        payload.tokens.access_token ||
+        payload.tokens.token;
+      if (typeof nestedToken === 'string' && nestedToken.trim()) {
+        return nestedToken.trim();
+      }
+    }
+
+    if (payload.data && typeof payload.data === 'object') {
+      return this.extractToken(payload.data);
+    }
+
+    return null;
+  }
+
   /**
    * Register a new user
    */
@@ -23,9 +60,10 @@ export class AuthService {
     );
     
     // Store token after successful registration - don't fail if storage fails
-    if (response.token) {
+    const token = this.extractToken(response);
+    if (token) {
       try {
-        await apiClient.setToken(response.token);
+        await apiClient.setToken(token);
         console.log('AuthService: Registration token stored successfully');
       } catch (storageError: any) {
         console.warn('AuthService: Token storage failed (non-critical):', storageError);
@@ -44,28 +82,27 @@ export class AuthService {
       console.log('AuthService: Sending login request to:', API_ENDPOINTS.AUTH.LOGIN);
       console.log('AuthService: Login data:', { username: data.username, password: '***' });
       
-      const response = await apiClient.post<any>(
+      const response = await apiClient.getInstance().post<any>(
         API_ENDPOINTS.AUTH.LOGIN,
         data
       );
       
-      console.log('AuthService: Login response received:', JSON.stringify(response, null, 2));
+      console.log('AuthService: Login response received:', JSON.stringify(response?.data, null, 2));
       
-      // Handle different response formats
-      let authResponse: AuthResponse;
-      let token: string | undefined;
-      
-      // Extract token from various possible locations
-      if (response.token) {
-        token = response.token;
-      } else if (response.data?.token) {
-        token = response.data.token;
-      } else if (response.auth_token) {
-        token = response.auth_token;
-      }
+      const responseData = response?.data ?? {};
+      const tokenFromBody = this.extractToken(responseData);
+      const headerAuth =
+        response?.headers?.authorization ||
+        response?.headers?.Authorization ||
+        response?.headers?.['x-auth-token'];
+      const tokenFromHeaders =
+        typeof headerAuth === 'string' && headerAuth.trim()
+          ? headerAuth.trim()
+          : null;
+      const token = tokenFromBody || tokenFromHeaders;
       
       if (!token) {
-        console.warn('AuthService: No token found in response:', response);
+        console.warn('AuthService: No token found in response:', responseData);
         throw new Error('Login response missing authentication token');
       }
       
@@ -80,10 +117,10 @@ export class AuthService {
       
       // Extract user data
       let user: User | undefined;
-      if (response.user) {
-        user = response.user;
-      } else if (response.data?.user) {
-        user = response.data.user;
+      if (responseData.user) {
+        user = responseData.user;
+      } else if (responseData.data?.user) {
+        user = responseData.data.user;
       }
       
       // If no user in response, fetch it
@@ -102,7 +139,7 @@ export class AuthService {
         }
       }
       
-      authResponse = {
+      const authResponse: AuthResponse = {
         token,
         user
       };

@@ -4,8 +4,8 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { BorderRadius, Colors, Shadows, Spacing, Typography } from '@/constants/design-system';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useState, useMemo } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { useTransactions } from '@/contexts/transactions-context';
 import { useCategories } from '@/contexts/categories-context';
@@ -33,8 +33,8 @@ export default function AddTransactionScreen() {
   const params = useLocalSearchParams();
   const isEditMode = !!params.id;
   const { createTransaction, updateTransaction } = useTransactions();
-  const { categories } = useCategories();
-  const { merchants } = useMerchants();
+  const { categories, refreshCategories } = useCategories();
+  const { merchants, refreshMerchants } = useMerchants();
   
   const [type, setType] = useState<TransactionType>((params.type as TransactionType) || 'expense');
   const [amount, setAmount] = useState(params.amount?.toString() || '');
@@ -57,6 +57,19 @@ export default function AddTransactionScreen() {
   const filteredCategories = useMemo(() => {
     return categories.filter(cat => cat.type === type);
   }, [categories, type]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshCategories();
+      refreshMerchants();
+    }, [refreshCategories, refreshMerchants])
+  );
+
+  useEffect(() => {
+    if (!isEditMode && !categoryId && filteredCategories.length > 0) {
+      setCategoryId(filteredCategories[0].id);
+    }
+  }, [filteredCategories, categoryId, isEditMode]);
 
   // Format date for display (YYYY-MM-DD to DD/MM/YYYY)
   const displayDate = useMemo(() => {
