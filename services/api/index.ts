@@ -16,6 +16,7 @@ export { TransactionsService } from './transactions.service';
 export { ReceiptsService } from './receipts.service';
 export { ReceiptItemsService } from './receipt-items.service';
 export { InvoicesService } from './invoices.service';
+export { InvoiceItemsService } from './invoice-items.service';
 export { LiabilitiesService } from './liabilities.service';
 export { RulesService } from './rules.service';
 export { BudgetsService } from './budgets.service';
@@ -26,3 +27,6 @@ export { CompaniesService } from './companies.service';
 export { CompanyUsersService } from './company-users.service';
 export { RolesService } from './roles.service';
 export { PermissionsService } from './permissions.service';
+
+// Helper functions
+export * from './invoice-helpers';

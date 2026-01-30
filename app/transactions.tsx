@@ -15,18 +15,22 @@ export default function TransactionsScreen() {
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Refresh when screen comes into focus
+  // Refresh when screen comes into focus - always load ALL transactions
+  // We'll filter client-side for better UX
   useFocusEffect(
     useCallback(() => {
-      const params = filter !== 'all' ? { type: filter } : undefined;
-      refreshTransactions(params);
-    }, [filter, refreshTransactions])
+      // Always load all transactions, filter client-side
+      refreshTransactions();
+    }, [refreshTransactions])
   );
 
   const filteredTransactions = useMemo(() => {
     return transactions
       .filter(t => {
+        // Filter by type (income/expense/all)
         if (filter !== 'all' && t.type !== filter) return false;
+        
+        // Filter by search query
         if (searchQuery) {
           const query = searchQuery.toLowerCase();
           return (

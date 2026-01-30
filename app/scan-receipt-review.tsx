@@ -549,6 +549,19 @@ export default function ScanReceiptReviewScreen() {
         'Saving receipt items'
       );
 
+      // Finalize receipt after all edits are saved
+      setSaveStatus('Finalizing receipt...');
+      await withTimeout(
+        ReceiptsService.finalizeReceipt(activeReceiptId, {
+          vendor_name: extractedData.vendor_name,
+          receipt_date: normalizedDate,
+          total_amount: normalizedAmount,
+          tax_amount: normalizeAmount(extractedData.tax_amount),
+        }),
+        20000,
+        'Finalizing receipt'
+      );
+
       // Create transaction from receipt
       // Note: You may want to get the merchant ID from the merchant name
       // For now, we'll create without merchant
@@ -572,7 +585,26 @@ export default function ScanReceiptReviewScreen() {
       const successMessage = defaultCategoryId
         ? 'Receipt and transaction saved successfully!'
         : 'Receipt saved successfully. No expense category found, so a transaction was not created.';
-      Alert.alert('Success', successMessage, [{ text: 'OK', onPress: () => router.replace('/transactions') }]);
+      
+      // Redirect to transactions page
+      // For web platform, redirect immediately
+      if (Platform.OS === 'web') {
+        setSaveStatus('Success! Redirecting...');
+        // Small delay to show success message, then redirect
+        setTimeout(() => {
+          router.replace('/transactions');
+        }, 800);
+      } else {
+        // For mobile platforms, show alert with redirect
+        Alert.alert('Success', successMessage, [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              router.replace('/transactions');
+            }
+          }
+        ]);
+      }
       setSaveStatus(null);
     } catch (error: any) {
       console.error('Error saving receipt:', error);

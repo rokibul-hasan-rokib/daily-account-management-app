@@ -186,4 +186,19 @@ export class ReceiptsService {
       API_ENDPOINTS.RECEIPTS.EXTRACT(id)
     );
   }
+
+  /**
+   * Finalize receipt after user edits
+   * POST /api/receipts/{id}/finalize/
+   * Saves the receipt with all user edits and marks it as finalized
+   */
+  static async finalizeReceipt(
+    id: number,
+    data?: Partial<ReceiptRequest>
+  ): Promise<Receipt> {
+    return await apiClient.post<Receipt>(
+      API_ENDPOINTS.RECEIPTS.FINALIZE(id),
+      data || {}
+    );
+  }
 }

@@ -143,11 +143,30 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number) => `/receipts/${id}/`,
     DELETE: (id: number) => `/receipts/${id}/`,
     EXTRACT: (id: number) => `/receipts/${id}/extract/`,
+    FINALIZE: (id: number) => `/receipts/${id}/finalize/`,
   },
   // Invoices
   INVOICES: {
     DETAIL: (id: number) => `/invoices/${id}/`,
     EXTRACT: (id: number) => `/invoices/${id}/extract/`,
+    FINALIZE: (id: number) => `/invoices/${id}/finalize/`,
+  },
+  // Invoice Items
+  INVOICE_ITEMS: {
+    LIST: (params?: {
+      search?: string;
+      start_date?: string;
+      end_date?: string;
+      invoice?: number;
+      ordering?: string;
+    }) => {
+      const query = buildQueryString(params || {});
+      return `/invoice-items${query}`;
+    },
+    CREATE: '/invoice-items/',
+    DETAIL: (id: number) => `/invoice-items/${id}/`,
+    UPDATE: (id: number) => `/invoice-items/${id}/`,
+    DELETE: (id: number) => `/invoice-items/${id}/`,
   },
   // Receipt Items
   RECEIPT_ITEMS: {

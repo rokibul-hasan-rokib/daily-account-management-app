@@ -197,12 +197,69 @@ export interface ReceiptExtractResponse {
 }
 
 // Invoice types
+export interface Invoice {
+  id: number;
+  vendor_name?: string;
+  invoice_date?: string;
+  total_amount?: string;
+  tax_amount?: string;
+  image?: string;
+  is_extracted?: boolean;
+  extraction_confidence?: number;
+  items?: InvoiceItem[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InvoiceRequest {
+  vendor_name?: string;
+  invoice_date?: string;
+  total_amount?: string;
+  tax_amount?: string;
+  image?: File | string | FormData;
+}
+
 export interface InvoiceExtractResponse {
   message?: string;
   invoice_id?: number;
   extracted?: boolean;
   confidence?: number;
   extracted_data?: Record<string, any>;
+}
+
+export interface InvoiceItem {
+  id: number;
+  item_name: string;
+  description?: string;
+  quantity: string;
+  rate: string;
+  amount: string;
+  category?: number;
+  category_name?: string;
+  product_code?: string;
+  notes?: string;
+  invoice?: number;
+  created_at?: string;
+}
+
+export interface InvoiceItemRequest {
+  invoice: number; // Required: Invoice ID
+  item_name: string; // Required: Item name
+  quantity: string; // Required: Quantity (string format, e.g., "20.00")
+  rate: string; // Required: Unit rate/price (string format, e.g., "0.90")
+  amount: string; // Required: Total amount (string format, e.g., "18.00")
+  description?: string; // Optional: Item description
+  category?: number; // Optional: Category ID
+  product_code?: string; // Optional: Product code
+  notes?: string; // Optional: Additional notes
+}
+
+export interface InvoiceItemListParams {
+  search?: string;
+  start_date?: string;
+  end_date?: string;
+  invoice?: number;
+  ordering?: string;
 }
 
 export interface ReceiptUploadResponse {
