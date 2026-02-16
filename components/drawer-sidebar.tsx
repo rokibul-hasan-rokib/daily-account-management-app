@@ -47,6 +47,21 @@ const navItems: NavItem[] = [
     href: '/bills',
   },
   {
+    title: 'Budgets',
+    icon: 'account-balance-wallet',
+    href: '/budgets',
+  },
+  {
+    title: 'Receipts',
+    icon: 'receipt-long',
+    href: '/receipts',
+  },
+  {
+    title: 'Invoices',
+    icon: 'request-quote',
+    href: '/invoices',
+  },
+  {
     title: 'Item Analytics',
     icon: 'bar-chart',
     href: '/item-analytics',
@@ -102,6 +117,11 @@ const companyNavItems: NavItem[] = [
 ];
 
 const settingsNavItems: NavItem[] = [
+  {
+    title: 'Profile',
+    icon: 'person',
+    href: '/profile',
+  },
   {
     title: 'Settings',
     icon: 'settings',

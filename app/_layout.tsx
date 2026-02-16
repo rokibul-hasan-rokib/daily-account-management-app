@@ -17,6 +17,8 @@ import { ProfileProvider } from '@/contexts/profile-context';
 import { CompanyProvider } from '@/contexts/company-context';
 import { CompanyUsersProvider } from '@/contexts/company-users-context';
 import { RolesProvider } from '@/contexts/roles-context';
+import { BudgetsProvider } from '@/contexts/budgets-context';
+import { InvoicesProvider } from '@/contexts/invoices-context';
 import { DrawerSidebar } from '@/components/drawer-sidebar';
 
 export const unstable_settings = {
@@ -36,10 +38,12 @@ export default function RootLayout() {
                 <TransactionsProvider>
                   <ReceiptsProvider>
                     <LiabilitiesProvider>
-                      <RulesProvider>
-                        <AlertsProvider>
-                          <ProfileProvider>
-                            <DrawerProvider>
+                      <BudgetsProvider>
+                        <InvoicesProvider>
+                          <RulesProvider>
+                            <AlertsProvider>
+                              <ProfileProvider>
+                                <DrawerProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <Stack>
               <Stack.Screen name="splash" options={{ headerShown: false }} />
@@ -52,9 +56,11 @@ export default function RootLayout() {
             <StatusBar style="light" />
           </ThemeProvider>
         </DrawerProvider>
-                            </ProfileProvider>
-                          </AlertsProvider>
-                        </RulesProvider>
+                                </ProfileProvider>
+                              </AlertsProvider>
+                            </RulesProvider>
+                          </InvoicesProvider>
+                        </BudgetsProvider>
                       </LiabilitiesProvider>
                     </ReceiptsProvider>
                   </TransactionsProvider>

@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: Typography.fontSize['4xl'],
+    fontSize: Typography.fontSize['4xl'], 
     fontWeight: Typography.fontWeight.bold,
     marginBottom: Spacing.xs,
     color: Colors.text.primary,
